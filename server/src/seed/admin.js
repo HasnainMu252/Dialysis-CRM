@@ -6,7 +6,9 @@ await connectDB();
 
 const run = async () => {
   const email = "admin@dialysiscrm.com";
-  await User.deleteMany({});
+//  await User.deleteMany({});
+//  console.log("✅ All users deleted");
+//  process.exit(0);
 
   const admin = await User.create({
     name: "System Admin",
