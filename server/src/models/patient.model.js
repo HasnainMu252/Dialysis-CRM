@@ -7,8 +7,14 @@ const patientSchema = new mongoose.Schema(
     lastName: { type: String, required: true },
     dob: { type: Date, required: true },
     gender: { type: String, enum: ["M", "F", "Other"] },
-    phone: String,
-    email: String,
+    phone:{
+  type: String,
+  required: [true, "Phone number is required"],
+  validate: {
+    validator: (v) => /^\d{11,12}$/.test(v),
+    message: "Phone number must contain 11–12 digits only"
+  }},
+    email: {type:String,match: [/^\S+@\S+\.\S+$/, "Invalid email format"]},
     address: String,
     insurance: {
       provider: String,

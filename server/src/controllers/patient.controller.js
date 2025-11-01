@@ -2,7 +2,15 @@ import Patient from "../models/patient.model.js";
 
 export const createPatient = async (req, res) => {
   const patient = await Patient.create(req.body);
-  res.status(201).json(patient);
+  if(!patient){
+    return res.status(400).json({
+      success:false,
+      message:"please Fill the form"
+    })
+  }else{
+
+    res.status(201).json(patient);
+  }
 };
 
 export const listPatients = async (req, res) => {
