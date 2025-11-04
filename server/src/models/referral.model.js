@@ -6,7 +6,11 @@ const referralSchema = new mongoose.Schema(
     contact: String,
     patientName: String,
     notes: String,
-    status: { type: String, enum: ["New", "Contacted", "Converted", "Closed"], default: "New" }
+    status: {
+      type: String,
+      enum: ["New", "Contacted", "Converted", "Closed"],
+      default: "New",
+    },
   },
   { timestamps: true }
 );

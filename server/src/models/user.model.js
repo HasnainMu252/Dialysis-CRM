@@ -8,10 +8,14 @@ const userSchema = new mongoose.Schema(
     name: { type: String, required: true, trim: true },
     email: { type: String, required: [true,'Email is required'], unique: true, lowercase: true,match: [/^\S+@\S+\.\S+$/, "Invalid email format"] },
     password: { type: String, required: true, minlength: 6 },
+    
+    
     role: { type: String, enum: roles, default: "Nurse" },
     active: { type: Boolean, default: true }
   },
   { timestamps: true }
+
+  
 );
 
 userSchema.pre("save", async function (next) {

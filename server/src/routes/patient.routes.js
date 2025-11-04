@@ -1,6 +1,6 @@
 import { Router } from "express";
 import { requireAuth, authorizeRoles } from "../middleware/auth.js";
-import { createPatient, listPatients, getPatient, updatePatient, removePatient } from "../controllers/patient.controller.js";
+import { createPatient, listPatients, getPatient, updatePatient, removePatient,deleteAllPatients } from "../controllers/patient.controller.js";
 
 const router = Router();
 
@@ -12,5 +12,10 @@ router.post("/", authorizeRoles("Admin", "CaseManager"), createPatient);
 router.get("/:id",  getPatient);
 router.put("/:id", authorizeRoles("Admin", "CaseManager"), updatePatient);
 router.delete("/:id", authorizeRoles("Admin"), removePatient);
+
+
+// 🔥 bulk delete (Admin only) with guard
+router.delete("/", authorizeRoles("Admin"), deleteAllPatients);
+
 
 export default router;

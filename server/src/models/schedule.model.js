@@ -4,12 +4,16 @@ const scheduleSchema = new mongoose.Schema(
   {
     patient: { type: mongoose.Schema.Types.ObjectId, ref: "Patient", required: true },
     date: { type: Date, required: true },
-    startTime: { type: String, required: true }, // e.g. "08:00"
+    startTime: { type: String, required: true },
     endTime: { type: String, required: true },
-    station: { type: String }, // chair/machine number
+    station: { type: String },
     nurse: { type: mongoose.Schema.Types.ObjectId, ref: "User" },
-    notes: String,
-    status: { type: String, enum: ["Scheduled", "Completed", "Missed", "Cancelled"], default: "Scheduled" }
+    status: {
+      type: String,
+      enum: ["Scheduled", "Completed", "Missed", "Cancelled"],
+      default: "Scheduled",
+    },
+    notes: { type: String },
   },
   { timestamps: true }
 );

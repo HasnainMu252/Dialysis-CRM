@@ -7,6 +7,9 @@ import { connectDB } from "./config/db.js";
 import { notFound, errorHandler } from "./middleware/error.js";
 import authRoutes from "./routes/auth.routes.js";
 import patientRoutes from "./routes/patient.routes.js";
+import scheduleRoutes from "./routes/schedule.routes.js";
+import billingRoutes from "./routes/billing.routes.js";
+import referralRoutes from "./routes/referral.routes.js";
 // (add more routes as you build them)
 
 const app = express();
@@ -22,6 +25,9 @@ app.use(morgan("dev"));
 app.get("/api/health", (_req, res) => res.json({ status: "ok" }));
 app.use("/api/auth", authRoutes);
 app.use("/api/patients", patientRoutes);
+app.use("/api/schedules", scheduleRoutes);
+app.use("/api/billing", billingRoutes);
+app.use("/api/referrals", referralRoutes);
 
 // errors
 app.use(notFound);

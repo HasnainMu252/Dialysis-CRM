@@ -5,11 +5,10 @@ const billingSchema = new mongoose.Schema(
     patient: { type: mongoose.Schema.Types.ObjectId, ref: "Patient", required: true },
     encounterDate: { type: Date, required: true },
     cptCodes: [{ code: String, amount: Number }],
-    dxCodes: [String], // ICD codes
-    payer: { type: String },
-    status: { type: String, enum: ["Draft", "Submitted", "Paid", "Denied"], default: "Draft" },
+    payer: String,
     total: Number,
-    notes: String
+    status: { type: String, enum: ["Draft", "Submitted", "Paid", "Denied"], default: "Draft" },
+    notes: String,
   },
   { timestamps: true }
 );
