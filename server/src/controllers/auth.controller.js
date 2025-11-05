@@ -1,5 +1,6 @@
 import jwt from "jsonwebtoken";
 import User from "../models/user.model.js";
+import userModel from "../models/user.model.js";
 
 const signToken = (id) =>
   jwt.sign({ id }, process.env.JWT_SECRET, { expiresIn: process.env.JWT_EXPIRES || "7d" });
@@ -54,6 +55,16 @@ export const login = async (req, res) => {
 };
 
 
+// export const me = async (req, res) => {
+//   res.json({ user: req.user });
+// };
+
 export const me = async (req, res) => {
-  res.json({ user: req.user });
-};
+  // const q = req.query.q;
+  // const filter = q
+  //   ? { $or: [{ name: new RegExp(q, "i") }, { lastName: new RegExp(q, "i") }, { mrn: new RegExp(q, "i") }] }
+  //   : {};
+  const users = await userModel.find({})
+  res.json(users)
+    ;
+  }
