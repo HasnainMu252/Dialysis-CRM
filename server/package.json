@@ -5,10 +5,11 @@
   "main": "src/server.js",
   "scripts": {
     "dev": "nodemon src/server.js",
-    "start": "node src/server.js",
+    "start": "node ./src/server.js",
     "lint": "eslint .",
     "format": "prettier --write .",
-    "seed": "node src/seed/admin.js"
+    "seed": "node src/seed/admin.js",
+    "swagger-autogen": "node swaggerGen.js"
   },
   "keywords": [],
   "author": "",
@@ -23,11 +24,13 @@
     "jsonwebtoken": "^9.0.2",
     "mongodb": "^6.20.0",
     "mongoose": "^8.19.2",
-    "morgan": "^1.10.1"
+    "morgan": "^1.10.1",
+    "swagger-ui-express": "^5.0.1"
   },
   "devDependencies": {
     "eslint": "^9.38.0",
     "nodemon": "^3.1.10",
-    "prettier": "^3.6.2"
+    "prettier": "^3.6.2",
+    "swagger-autogen": "^2.23.7"
   }
 }

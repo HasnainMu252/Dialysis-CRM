@@ -10,19 +10,26 @@ import patientRoutes from "./routes/patient.routes.js";
 import scheduleRoutes from "./routes/schedule.routes.js";
 import billingRoutes from "./routes/billing.routes.js";
 import referralRoutes from "./routes/referral.routes.js";
-import bedRoutes from './routes/bed.routes.js'
-// (add more routes as you build them)
+import bedRoutes from "./routes/bed.routes.js";
+
+import swaggerUi from "swagger-ui-express"; // ✅ you need this
+import { createRequire } from "module";
+const require = createRequire(import.meta.url);
+const swaggerDocument = require("../swagger-output.json"); // ✅ load generated swagger file
 
 const app = express();
 
-// middlewares
+// ✅ Swagger route must come after app = express()
+app.use("/api-docs", swaggerUi.serve, swaggerUi.setup(swaggerDocument));
+
+// Middlewares
 app.use(cors({ origin: process.env.CORS_ORIGIN, credentials: true }));
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 app.use(cookieParser());
 app.use(morgan("dev"));
 
-// routes
+// Routes
 app.get("/api/health", (_req, res) => res.json({ status: "ok" }));
 app.use("/api/auth", authRoutes);
 app.use("/api/auth/me", authRoutes);
@@ -32,13 +39,12 @@ app.use("/api/billing", billingRoutes);
 app.use("/api/referrals", referralRoutes);
 app.use("/api/beds", bedRoutes);
 
-// errors
+// Error Handlers
 app.use(notFound);
 app.use(errorHandler);
 
-// start
+// Server start
 const PORT = process.env.PORT || 5000;
-
 connectDB().then(() => {
-  app.listen(PORT, () => console.log(`Server running on :${PORT}`));
+  app.listen(PORT, () => console.log(`✅ Server running on port ${PORT}`));
 });
