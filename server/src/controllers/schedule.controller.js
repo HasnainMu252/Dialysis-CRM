@@ -13,72 +13,45 @@ const buildUTCDate = (yyyyMmDd) => {
 
 export const createSchedule = async (req, res) => {
   try {
-    const { patient, bed, nurse, date, startTime, endTime } = req.body;
+    const { patient, bed, date, startTime, endTime } = req.body;
 
-    // Validate basics
-    if (!DATE_RE.test(date))    return res.status(400).json({ message: "date must be YYYY-MM-DD" });
-    if (!TIME_RE.test(startTime)||!TIME_RE.test(endTime)) return res.status(400).json({ message: "time must be HH:mm" });
+    if (!patient || !bed || !date || !startTime || !endTime)
+      return res.status(400).json({ message: "Missing required fields" });
 
-    const scheduleDate = buildUTCDate(date);
-    if (!scheduleDate) return res.status(400).json({ message: "Invalid date" });
+    const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
+    const TIME_RE = /^([01]\d|2[0-3]):[0-5]\d$/;
 
-    const start = toMin(startTime), end = toMin(endTime);
-    if (start >= end) return res.status(400).json({ message: "startTime must be < endTime" });
+    if (!DATE_RE.test(date) || !TIME_RE.test(startTime) || !TIME_RE.test(endTime))
+      return res.status(400).json({ message: "Invalid date/time format" });
 
-    // Past check (date + time today)
-    const now = new Date();
-    const todayUTC = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()));
-    if (scheduleDate < todayUTC) return res.status(400).json({ message: "Cannot schedule in the past date" });
-    if (scheduleDate.getTime() === todayUTC.getTime()) {
-      const startMs = Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate(), Math.floor(start/60), start%60, 0);
-      if (startMs <= now.getTime()) return res.status(400).json({ message: "Cannot schedule a past time today" });
-    }
+    const [y, m, d] = date.split("-").map(Number);
+    const scheduleDate = new Date(Date.UTC(y, m - 1, d, 0, 0, 0));
 
-    // Bed must exist
+    const start = parseInt(startTime.split(":")[0]) * 60 + parseInt(startTime.split(":")[1]);
+    const end = parseInt(endTime.split(":")[0]) * 60 + parseInt(endTime.split(":")[1]);
+
+    if (start >= end)
+      return res.status(400).json({ message: "startTime must be before endTime" });
+
+    // 🧩 Bed must exist and not under maintenance
     const bedDoc = await Bed.findById(bed);
-    if (!bedDoc) return res.status(400).json({ message: "Bed not found" });
-    if (bedDoc.status === "UnderMaintenance") {
+    if (!bedDoc) return res.status(404).json({ message: "Bed not found" });
+    if (bedDoc.status === "UnderMaintenance")
       return res.status(400).json({ message: `Bed ${bedDoc.name} is under maintenance` });
-    }
 
-    // Overlap rules with 30m post-maintenance on existing sessions
-    const existing = await Schedule.find({ date: scheduleDate, bed });
-    const requestedStart = start, requestedEndWithMaint = end + 30;
-
-    const clashBed = existing.some(s=>{
-      const sS = toMin(s.startTime);
-      const sEWithMaint = toMin(s.endTime) + 30; // existing session holds bed +30m
-      return !(requestedEndWithMaint <= sS || requestedStart >= sEWithMaint);
-    });
-    if (clashBed) {
-      return res.status(400).json({ message: `Bed ${bedDoc.name} is busy or in maintenance window for that time.` });
-    }
-
-    // Patient can't overlap own sessions
-    const samePatient = await Schedule.findOne({
-      patient, date: scheduleDate,
-      $and: [{ startTime: { $lte: endTime } }, { endTime: { $gte: startTime } }]
-    });
-    if (samePatient) {
-      return res.status(400).json({ message: "Patient already has a session in this time window." });
-    }
-
-    // Nurse cannot overlap
-    if (nurse) {
-      const sameNurse = await Schedule.findOne({
-        nurse, date: scheduleDate,
-        $and: [{ startTime: { $lte: endTime } }, { endTime: { $gte: startTime } }]
-      });
-      if (sameNurse) return res.status(400).json({ message: "Nurse is already assigned in this window." });
-    }
-
-    // Create schedule
-    const schedule = await Schedule.create({
-      patient, bed, nurse, date: scheduleDate, startTime, endTime
+    // 🧩 Prevent overlap
+    const overlap = await Schedule.findOne({
+      bed,
+      date: scheduleDate,
+      $and: [{ startTime: { $lt: endTime } }, { endTime: { $gt: startTime } }]
     });
 
-    // Optionally mark bed Busy immediately (bed status is informational; conflicts are enforced by queries above)
-    await Bed.findByIdAndUpdate(bed, { status: "Busy" }, { new: true });
+    if (overlap)
+      return res.status(400).json({ message: `Bed ${bedDoc.name} already booked for that time.` });
+
+    // ✅ Create Schedule
+    const schedule = await Schedule.create({ patient, bed, date: scheduleDate, startTime, endTime });
+    await Bed.findByIdAndUpdate(bed, { status: "Busy" });
 
     res.status(201).json({ message: "✅ Schedule created successfully.", schedule });
   } catch (err) {
@@ -88,10 +61,16 @@ export const createSchedule = async (req, res) => {
 };
 
 export const getSchedules = async (req, res) => {
-  const schedules = await Schedule.find()
-    .populate("patient", "firstName lastName mrn")
-    .populate("nurse", "name role");
-  res.json(schedules);
+  try {
+    const schedules = await Schedule.find()
+      .populate("patient", "firstName lastName mrn")
+      .populate("bed", "name status")
+      .sort({ date: 1, startTime: 1 });
+
+    res.json(schedules);
+  } catch (err) {
+    res.status(500).json({ message: "Server error", error: err.message });
+  }
 };
 
 export const getSchedule = async (req, res) => {
@@ -104,35 +83,28 @@ export const getSchedule = async (req, res) => {
 
 
 export const updateSchedule = async (req, res) => {
-  const schedule = await Schedule.findByIdAndUpdate(req.params.id, req.body, { new: true });
-  if (!schedule) return res.status(404).json({ message: "Schedule not found" });
+  try {
+    const allowedForNurse = ["status", "cancel"];
+    const updates = req.body;
 
-  // If nurse set status=Completed, maintain bed for +30 min then free it
-  if (req.body.status === "Completed") {
-    const now = new Date();
-    const endMins = toMin(schedule.endTime);
-    const endMs = Date.UTC(
-      schedule.date.getUTCFullYear(),
-      schedule.date.getUTCMonth(),
-      schedule.date.getUTCDate(),
-      Math.floor(endMins/60),
-      endMins%60,
-      0,0
-    );
-    const releaseAt = endMs + 30*60*1000; // +30m
-    const delay = Math.max(0, releaseAt - now.getTime());
+    // role-based field filter
+    if (req.user.role === "Nurse") {
+      Object.keys(updates).forEach(key => {
+        if (!allowedForNurse.includes(key))
+          delete updates[key];
+      });
+    }
 
-    // Mark bed Busy during maintenance window
-    await Bed.findByIdAndUpdate(schedule.bed, { status: "Busy" });
+    const schedule = await Schedule.findByIdAndUpdate(req.params.id, updates, { new: true })
+      .populate("patient", "firstName lastName mrn")
+      .populate("bed", "name status");
 
-    // async release
-    (async ()=>{
-      await wait(delay);
-      await Bed.findByIdAndUpdate(schedule.bed, { status: "Available" });
-    })();
+    if (!schedule) return res.status(404).json({ message: "Schedule not found" });
+
+    res.json({ message: "✅ Schedule updated.", schedule });
+  } catch (err) {
+    res.status(500).json({ message: "Server error", error: err.message });
   }
-
-  res.json(schedule);
 };
 
 export const deleteSchedule = async (req, res) => {
