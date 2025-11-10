@@ -1,0 +1,59 @@
+/* Background */
+.login-wrapper {
+  min-height: 100vh;
+  background: linear-gradient(135deg, #f9fbfc, #eef6f4);
+  font-family: "Poppins", sans-serif;
+}
+
+/* Brand title */
+.app-title {
+  font-weight: 700;
+  font-size: 2rem !important;
+  margin-bottom: 0.2rem;
+}
+
+.brand-name {
+  color: #3ba694;
+}
+
+.brand-accent {
+  color: #2b3d4f;
+}
+
+/* Card styling */
+.card {
+  background-color: #ffffff;
+  border-radius: 16px;
+  border: 1px solid #e5e9ec;
+}
+
+.form-control {
+  border-radius: 10px;
+  border: 1px solid #dfe3e8;
+  padding: 10px 12px;
+}
+
+.form-control:focus {
+  border-color: #3ba694;
+  box-shadow: 0 0 0 0.25rem rgba(59, 166, 148, 0.25);
+}
+
+/* Button */
+button[type="submit"] {
+  background-color: #3ba694;
+  border: none;
+  padding: 10px;
+  font-weight: 500;
+  letter-spacing: 0.3px;
+  transition: all 0.3s ease;
+}
+
+button[type="submit"]:hover {
+  background-color: #2d887b;
+}
+
+/* Text */
+.text-muted {
+  color: #7a8b97 !important;
+  font-size: 1rem !important;
+}

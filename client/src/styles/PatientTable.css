@@ -1,0 +1,47 @@
+.title-text {
+  font-size: 1.8rem;
+  color: #1f2937;
+}
+
+.btn-teal {
+  background-color: #74b9b1;
+  color: white;
+  font-weight: 500;
+  border: none;
+  transition: all 0.3s ease;
+}
+
+.btn-teal:hover {
+  background-color: #5da8a0;
+}
+
+.custom-table {
+  border-radius: 10px;
+  overflow: hidden;
+  background-color: #fff;
+  box-shadow: 0 0 10px rgba(0, 0, 0, 0.05);
+}
+
+.custom-table thead {
+  background-color: #f8fafc;
+}
+
+.custom-table th {
+  font-weight: 600;
+  color: #374151;
+  text-transform: capitalize;
+  border-bottom: 2px solid #e5e7eb;
+}
+
+.custom-table td {
+  color: #4b5563;
+  vertical-align: middle;
+}
+
+.custom-table tr:hover {
+  background-color: #f9f9f9;
+}
+
+.table-responsive {
+  border-radius: 10px;
+}

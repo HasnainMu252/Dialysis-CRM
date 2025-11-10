@@ -1,0 +1,21 @@
+.modal-content {
+  border-radius: 20px;
+  border: none;
+}
+
+.modal-header {
+  background: #f7fdf8;
+}
+
+.progress {
+  height: 10px;
+}
+
+.btn-success {
+  background-color: #2e8b57 !important;
+  border: none !important;
+}
+
+.btn-outline-secondary {
+  border-radius: 50px;
+}

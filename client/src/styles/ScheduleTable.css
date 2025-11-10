@@ -1,0 +1,23 @@
+.table th {
+  background-color: #f8f9fa;
+  font-weight: 600;
+}
+
+.btn-teal {
+  background-color: #009688;
+  color: white;
+  border: none;
+}
+
+.btn-teal:hover {
+  background-color: #00796b;
+  color: white;
+}
+
+.page-title {
+  color: #004d40;
+}
+
+.card {
+  border-radius: 10px;
+}

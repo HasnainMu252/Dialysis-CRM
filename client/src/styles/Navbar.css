@@ -1,0 +1,48 @@
+/* --- Navbar Custom Styling --- */
+.myNav{
+    position: sticky;
+}
+.nav-link-custom {
+  color: black !important;
+  font-weight: 500;
+  position: relative;
+  padding-bottom: 4px;
+  transition: all 0.3s ease;
+}
+
+.nav-link-custom:hover {
+  color: #0781a9 !important;
+}
+
+.nav-link-custom.active::after,
+.nav-link-custom:hover::after {
+  content: "";
+  position: absolute;
+  left: 0;
+  bottom: 0;
+  width: 100%;
+  height: 2px;
+  background-color: #0781a9;
+  border-radius: 1px;
+}
+
+.profile-icon {
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  background-color: #74b9b1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 600;
+  color: white;
+}
+
+.profile-details .user-name {
+  font-weight: 500;
+}
+
+.profile-details .user-role {
+  font-size: 0.8rem;
+  color: gray;
+}

@@ -1,0 +1,31 @@
+.slide {
+  height: auto;
+  width: 100%;
+  background: linear-gradient(120deg, #b4fff69b, #4caf99);
+  animation: gradientShift 10s ease infinite;
+  border-radius: 12px;
+  color: white;
+}
+
+.slide-title {
+  font-weight: 700;
+  text-shadow: 2px 2px 8px rgba(0, 0, 0, 0.2);
+}
+
+.slide-subtitle {
+  min-height: 40px;
+  letter-spacing: 1px;
+}
+
+.blinking-cursor {
+  animation: blink 0.8s infinite;
+}
+
+@keyframes blink {
+  0%, 50%, 100% {
+    opacity: 1;
+  }
+  25%, 75% {
+    opacity: 0;
+  }
+}

@@ -1,0 +1,8 @@
+body {
+  background: linear-gradient(135deg, #f9fbfc, #eef6f4);
+  font-family: "Poppins", sans-serif;
+}
+
+.err-font{
+  font-size: 14px !important;
+}

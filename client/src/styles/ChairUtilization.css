@@ -1,0 +1,38 @@
+/* Chair Card Styling */
+.chair-available {
+    background-color: #e6ffe6 !important; /* Light Green */
+    border: 1px solid #90EE90 !important;
+    color: #006400; /* Dark Green Text */
+}
+
+.chair-occupied {
+    background-color: #ffe6e6 !important; /* Light Red/Pink */
+    border: 1px solid #FF6347 !important;
+    color: #8B0000; /* Dark Red Text */
+}
+
+.chair-maintenance {
+    background-color: #fff8e1 !important; /* Light Yellow/Orange */
+    border: 1px solid #FFD700 !important;
+    color: #ff8c00; /* Dark Orange Text */
+}
+
+/* Legend Styling */
+.status-dot {
+    height: 10px;
+    width: 10px;
+    border-radius: 50%;
+    display: inline-block;
+}
+
+.available-dot {
+    background-color: #90EE90;
+}
+
+.occupied-dot {
+    background-color: #FF6347;
+}
+
+.maintenance-dot {
+    background-color: #FFD700;
+}
