@@ -1,6 +1,7 @@
 import mongoose from "mongoose";
 import bcrypt from "bcrypt";
 
+
 const roles = ["Admin", "Nurse", "CaseManager", "Biller"];
 
 const userSchema = new mongoose.Schema(

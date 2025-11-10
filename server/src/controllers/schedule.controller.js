@@ -2,14 +2,15 @@ import Schedule from "../models/schedule.model.js";
 import { setTimeout as wait } from "timers/promises";
 import Bed from "../models/bed.model.js";
 
-const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
-const TIME_RE = /^([01]\d|2[0-3]):[0-5]\d$/;
-const toMin = (t)=>{ const [H,M]=t.split(":").map(Number); return H*60+M; };
-const buildUTCDate = (yyyyMmDd) => {
-  const [y,m,d] = yyyyMmDd.split("-").map(Number);
-  const dt = new Date(Date.UTC(y, m-1, d, 0,0,0,0));
-  return Number.isNaN(dt.getTime()) ? null : dt;
-};
+
+// const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
+// const TIME_RE = /^([01]\d|2[0-3]):[0-5]\d$/;
+// const toMin = (t)=>{ const [H,M]=t.split(":").map(Number); return H*60+M; };
+// const buildUTCDate = (yyyyMmDd) => {
+//   const [y,m,d] = yyyyMmDd.split("-").map(Number);
+//   const dt = new Date(Date.UTC(y, m-1, d, 0,0,0,0));
+//   return Number.isNaN(dt.getTime()) ? null : dt;
+// };
 
 export const createSchedule = async (req, res) => {
   try {

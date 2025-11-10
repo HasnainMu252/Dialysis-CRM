@@ -1,4 +1,5 @@
 import mongoose from "mongoose";
+import { mongooseDateTransform } from "../../../client/src/utils/mongooseTransform.js";
 
 const patientSchema = new mongoose.Schema(
   {
@@ -29,6 +30,6 @@ const patientSchema = new mongoose.Schema(
     status: { type: String, enum: ["Active", "Inactive"], default: "Active" }
   },
   { timestamps: true }
-);
+,mongooseDateTransform);
 
 export default mongoose.model("Patient", patientSchema);
