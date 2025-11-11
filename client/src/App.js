@@ -3,7 +3,7 @@ import { AuthProvider } from "./context/AuthContext";
 import LoginPage from "../src/pages/admin/Login";
 import Dashboard from "../src/pages/admin/Dashboard";
 import BedsPage from "../src/pages/admin/Bedspage";
-import SchedulePage from "../src/pages/admin/Scheduling";
+import SchedulePage from "./pages/SchedulingPages";
 import NurseDashboard from "./pages/admin/NursePage";
 
 export default function App() {
