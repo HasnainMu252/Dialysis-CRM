@@ -55,17 +55,14 @@ const HeaderNavbar = () => {
         {/* Center Section — Navigation Links */}
         <Navbar.Collapse id="basic-navbar-nav">
           <Nav className="mx-auto gap-3">
-            <Nav.Link href="/admin/dashboard" className="nav-link-custom active">
+            <Nav.Link href="/dashboard" className="nav-link-custom active">
               Dashboard
             </Nav.Link>
-            <Nav.Link href="/admin/patient" className="nav-link-custom">
-              Patients
-            </Nav.Link>
-            <Nav.Link href="/scheduling" className="nav-link-custom">
+            <Nav.Link href="/schedules" className="nav-link-custom">
               Scheduling
             </Nav.Link>
-            <Nav.Link href="/analytics" className="nav-link-custom">
-              Analytics
+            <Nav.Link href="/Patients" className="nav-link-custom">
+              Patients
             </Nav.Link>
           </Nav>
 

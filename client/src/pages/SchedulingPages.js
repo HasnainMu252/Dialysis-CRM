@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useCallback } from "react";
 import { Calendar, momentLocalizer } from "react-big-calendar";
 import { Button, Modal, Form, Spinner } from "react-bootstrap";
-import { format, parseISO } from "date-fns";
+import { format } from "date-fns";
 import moment from "moment";
 import "react-big-calendar/lib/css/react-big-calendar.css";
 import Navbar from "../components/Navbar";
@@ -14,7 +14,7 @@ const ScheduleCalendar = () => {
   const [loading, setLoading] = useState(true);
   const [showModal, setShowModal] = useState(false);
   const [patients, setPatients] = useState([]);
-const [beds, setBeds] = useState([]);
+  const [beds, setBeds] = useState([]);
   const [form, setForm] = useState({
     patient: "",
     bed: "",
@@ -24,38 +24,40 @@ const [beds, setBeds] = useState([]);
   });
   const token = localStorage.getItem("token");
 
+  // Fetch patients
   const fetchPatients = async () => {
-  try {
-    const res = await fetch("http://localhost:4000/api/patients", {
-      headers: { Authorization: `Bearer ${token}` },
-    });
-    const data = await res.json();
-    setPatients(data);
-  } catch (err) {
-    console.error("Error fetching patients:", err);
-  }
-};
+    try {
+      const res = await fetch("http://localhost:4000/api/patients", {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      const data = await res.json();
+      setPatients(data);
+    } catch (err) {
+      console.error("Error fetching patients:", err);
+    }
+  };
 
-const fetchBeds = async () => {
-  try {
-    const res = await fetch("http://localhost:4000/api/beds", {
-      headers: { Authorization: `Bearer ${token}` },
-    });
-    const data = await res.json();
-    setBeds(data);
-  } catch (err) {
-    console.error("Error fetching beds:", err);
-  }
-};
+  // Fetch beds
+  const fetchBeds = async () => {
+    try {
+      const res = await fetch("http://localhost:4000/api/beds", {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      const data = await res.json();
+      setBeds(data);
+    } catch (err) {
+      console.error("Error fetching beds:", err);
+    }
+  };
 
-useEffect(() => {
-  if (showModal) {
-    fetchPatients();
-    fetchBeds();
-  }
-}, [showModal]);
+  useEffect(() => {
+    if (showModal) {
+      fetchPatients();
+      fetchBeds();
+    }
+  }, [showModal]);
 
-  // ---------------- Fetch all schedules ----------------
+  // Fetch all schedules
   const fetchSchedules = useCallback(async () => {
     try {
       const res = await fetch("http://localhost:4000/api/schedules", {
@@ -64,7 +66,9 @@ useEffect(() => {
       const data = await res.json();
       const mapped = data.map((s) => ({
         id: s._id,
-        title: `${s.patient?.firstName || "Unknown"} ${s.patient?.lastName || ""} (${s.bed?.name || "Unassigned"})`,
+        title: `${s.patient?.firstName || "Unknown"} ${
+          s.patient?.lastName || ""
+        } (${s.bed?.name || "Unassigned"})`,
         start: new Date(`${s.date.split("T")[0]}T${s.startTime}`),
         end: new Date(`${s.date.split("T")[0]}T${s.endTime}`),
         status: s.status,
@@ -81,7 +85,7 @@ useEffect(() => {
     fetchSchedules();
   }, [fetchSchedules]);
 
-  // ---------------- Create new schedule ----------------
+  // Create schedule
   const handleCreate = async (e) => {
     e.preventDefault();
     try {
@@ -101,7 +105,7 @@ useEffect(() => {
     }
   };
 
-  // ---------------- Delete schedule ----------------
+  // Delete single schedule
   const handleDelete = async (eventId) => {
     if (!window.confirm("Delete this schedule?")) return;
     try {
@@ -115,7 +119,7 @@ useEffect(() => {
     }
   };
 
-  // ---------------- Delete all schedules ----------------
+  // Delete all schedules
   const handleDeleteAll = async () => {
     if (!window.confirm("Delete ALL schedules?")) return;
     try {
@@ -129,13 +133,12 @@ useEffect(() => {
     }
   };
 
-  // ---------------- Calendar slot styling ----------------
+  // Event color
   const eventStyleGetter = (event) => {
-    let bgColor = "#3498db"; // default
+    let bgColor = "#3498db";
     if (event.status === "Completed") bgColor = "#2ecc71";
     else if (event.status === "Cancel Requested") bgColor = "#e74c3c";
     else if (event.status === "In Progress") bgColor = "#f1c40f";
-
     return {
       style: {
         backgroundColor: bgColor,
@@ -147,7 +150,11 @@ useEffect(() => {
     };
   };
 
-  // ---------------- JSX ----------------
+  // Only show hours, not minutes
+  const formats = {
+    timeGutterFormat: (date) => format(date, "HH"),
+  };
+
   return (
     <>
       <Navbar />
@@ -170,18 +177,31 @@ useEffect(() => {
             <p className="text-muted mt-2">Loading schedules...</p>
           </div>
         ) : (
-          <Calendar
-            localizer={localizer}
-            events={events}
-            defaultView="week"
-            views={["day", "week", "month"]}
-            step={30}
-            timeslots={1}
-            defaultDate={new Date()}
-            style={{ height: "80vh" }}
-            eventPropGetter={eventStyleGetter}
-            onSelectEvent={(event) => handleDelete(event.id)}
-          />
+          <div className="rotated-calendar">
+            <Calendar
+            min={new Date()} // hide past days
+            onNavigate={(date) => {
+  const now = new Date();
+  if (date < now.setHours(0, 0, 0, 0)) return; // block navigation into past
+}}
+
+              localizer={localizer}
+              events={events}
+              formats={formats}
+              defaultView="week"
+              views={["day", "week"]}
+              dayLayoutAlgorithm="no-overlap"
+              step={60}
+              timeslots={1}
+              defaultDate={new Date()}
+              style={{ height: "80vh" }}
+              eventPropGetter={eventStyleGetter}
+              onSelectEvent={(event) => handleDelete(event.id)}
+              components={{
+                timeGutterHeader: () => <strong>Hours</strong>,
+              }}
+            />
+          </div>
         )}
       </div>
 
@@ -198,40 +218,110 @@ useEffect(() => {
                 type="text"
                 placeholder="Enter patient _id"
                 value={form.patient}
-                onChange={(e) => setForm({ ...form, patient: e.target.value })}
+                onChange={(e) =>
+                  setForm({ ...form, patient: e.target.value })
+                }
                 required
               />
             </Form.Group>
 
-            <Form.Group className="mb-3">
-  <Form.Label>Select Bed</Form.Label>
-  <div className="d-flex flex-wrap gap-2">
-    {beds.map((b) => (
-      <div
-        key={b._id}
-        onClick={() => setForm({ ...form, bed: b._id })}
-        className={`p-2 border rounded text-center ${
-          form.bed === b._id ? "bg-primary text-white" : ""
-        }`}
-        style={{
-          width: "100px",
-          cursor: b.status === "Busy" ? "not-allowed" : "pointer",
-          opacity: b.status === "Busy" ? 0.5 : 1,
-        }}
-      >
-        {b.name}
-        <div className="small text-muted">{b.status}</div>
-      </div>
-    ))}
-  </div>
+           <Form.Group className="mb-3">
+  <Form.Label>Date</Form.Label>
+  <Form.Control
+    type="date"
+    min={new Date().toISOString().split("T")[0]} // hide past dates
+    value={form.date}
+    onChange={(e) => setForm({ ...form, date: e.target.value })}
+    required
+  />
 </Form.Group>
+
+<div className="row">
+  <div className="col">
+    <Form.Group>
+      <Form.Label>Start Time</Form.Label>
+      <Form.Control
+        type="time"
+        step="3600"
+        value={form.startTime}
+        onChange={(e) => setForm({ ...form, startTime: e.target.value })}
+        required
+      />
+    </Form.Group>
+  </div>
+  <div className="col">
+    <Form.Group>
+      <Form.Label>End Time</Form.Label>
+      <Form.Control
+        type="time"
+        step="3600"
+        value={form.endTime}
+        onChange={(e) => setForm({ ...form, endTime: e.target.value })}
+        required
+      />
+    </Form.Group>
+  </div>
+</div>
+
+{/* Fetch available beds once all three fields filled */}
+{form.date && form.startTime && form.endTime && (
+  <Button
+    className="mt-3"
+    variant="secondary"
+    onClick={async () => {
+      const res = await fetch(
+        `http://localhost:4000/api/beds/availability?date=${form.date}&start=${form.startTime}&end=${form.endTime}`,
+        { headers: { Authorization: `Bearer ${token}` } }
+      );
+      const data = await res.json();
+      setBeds(data);
+    }}
+  >
+    Check Bed Availability
+  </Button>
+)}
+
+{/* Show available beds */}
+{beds.length > 0 && (
+  <Form.Group className="mt-4 mb-3">
+    <Form.Label>Select Bed</Form.Label>
+    <div className="d-flex flex-wrap gap-2">
+      {beds.map((b) => (
+        <div
+          key={b._id}
+          onClick={() => b.isFree && setForm({ ...form, bed: b._id })}
+          className={`p-2 border rounded text-center ${
+            form.bed === b._id ? "bg-primary text-white" : ""
+          }`}
+          style={{
+            width: "100px",
+            cursor: b.isFree ? "pointer" : "not-allowed",
+            opacity: b.isFree ? 1 : 0.5,
+          }}
+        >
+          {b.name}
+          <div
+            className={`small ${
+              b.isFree ? "text-success" : "text-danger"
+            } fw-semibold`}
+          >
+            {b.isFree ? "Available" : "Booked"}
+          </div>
+        </div>
+      ))}
+    </div>
+  </Form.Group>
+)}
+
 
             <Form.Group className="mb-3">
               <Form.Label>Date</Form.Label>
               <Form.Control
                 type="date"
                 value={form.date}
-                onChange={(e) => setForm({ ...form, date: e.target.value })}
+                onChange={(e) =>
+                  setForm({ ...form, date: e.target.value })
+                }
                 required
               />
             </Form.Group>
@@ -242,9 +332,11 @@ useEffect(() => {
                   <Form.Label>Start Time</Form.Label>
                   <Form.Control
                     type="time"
-                    step="1800"
+                    step="3600"
                     value={form.startTime}
-                    onChange={(e) => setForm({ ...form, startTime: e.target.value })}
+                    onChange={(e) =>
+                      setForm({ ...form, startTime: e.target.value })
+                    }
                     required
                   />
                 </Form.Group>
@@ -254,9 +346,11 @@ useEffect(() => {
                   <Form.Label>End Time</Form.Label>
                   <Form.Control
                     type="time"
-                    step="1800"
+                    step="3600"
                     value={form.endTime}
-                    onChange={(e) => setForm({ ...form, endTime: e.target.value })}
+                    onChange={(e) =>
+                      setForm({ ...form, endTime: e.target.value })
+                    }
                     required
                   />
                 </Form.Group>

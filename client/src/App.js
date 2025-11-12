@@ -4,7 +4,8 @@ import LoginPage from "../src/pages/admin/Login";
 import Dashboard from "../src/pages/admin/Dashboard";
 import BedsPage from "../src/pages/admin/Bedspage";
 import SchedulePage from "./pages/SchedulingPages";
-import NurseDashboard from "./pages/admin/NursePage";
+import NurseDashboard from "./pages/admin/NursePage"
+import Patients from "./pages/admin/PatientPage";
 
 export default function App() {
   return (
@@ -16,6 +17,7 @@ export default function App() {
           <Route path="/dashboard/nurse" element={<NurseDashboard />} />
           <Route path="/beds" element={<BedsPage />} />
           <Route path="/schedules" element={<SchedulePage />} />
+          <Route path="/Patients" element={<Patients />} />
         </Routes>
       </BrowserRouter>
     </AuthProvider>
