@@ -22,29 +22,34 @@ export const updateBed = async (req, res) => {
 
 // Optional: simple availability check for a date & time range
 export const getBedAvailability = async (req, res) => {
-  // query: ?date=YYYY-MM-DD&start=HH:mm&end=HH:mm
   const { date, start, end } = req.query;
-  if (!date || !start || !end) return res.status(400).json({ message: "date, start, end required" });
+  if (!date || !start || !end)
+    return res.status(400).json({ message: "date, start, end required" });
 
-  // normalized UTC date (same helper as schedule controller)
-  const [y,m,d] = date.split("-").map(Number);
-  const day = new Date(Date.UTC(y, m-1, d, 0,0,0,0));
+  const [y, m, d] = date.split("-").map(Number);
+  const day = new Date(Date.UTC(y, m - 1, d, 0, 0, 0, 0));
 
   const schedules = await Schedule.find({ date: day });
-  // Return each bed with a flag "isFree" for that slot
-  const toMin = (t)=>{ const [H,M]=t.split(":").map(Number); return H*60+M; };
-  const reqS = toMin(start), reqE = toMin(end);
+  const toMin = (t) => {
+    const [H, M] = t.split(":").map(Number);
+    return H * 60 + M;
+  };
+  const reqS = toMin(start),
+    reqE = toMin(end);
 
   const beds = await Bed.find().sort({ name: 1 }).lean();
-  const result = beds.map(b => {
-    const clashes = schedules.filter(s => String(s.bed) === String(b._id)).some(s=>{
-      const sS=toMin(s.startTime), sE=toMin(s.endTime);
-      // session (2h) + maintenance (30m) block — we treat occupied until end+30
-      const sEWithMaint = sE + 30;
-      return !(reqE <= sS || reqS >= sEWithMaint);
-    });
+  const result = beds.map((b) => {
+    const clashes = schedules
+      .filter((s) => String(s.bed) === String(b._id))
+      .some((s) => {
+        const sS = toMin(s.startTime),
+          sE = toMin(s.endTime);
+        // direct time overlap
+        return !(reqE <= sS || reqS >= sE);
+      });
     return { ...b, isFree: !clashes };
   });
 
   res.json(result);
 };
+

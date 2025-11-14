@@ -2,16 +2,23 @@ import Schedule from "../models/schedule.model.js";
 import { setTimeout as wait } from "timers/promises";
 import Bed from "../models/bed.model.js";
 
+// Regex for date and time validation
+const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
+const TIME_RE = /^([01]\d|2[0-3]):[0-5]\d$/;
 
-// const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
-// const TIME_RE = /^([01]\d|2[0-3]):[0-5]\d$/;
-// const toMin = (t)=>{ const [H,M]=t.split(":").map(Number); return H*60+M; };
-// const buildUTCDate = (yyyyMmDd) => {
-//   const [y,m,d] = yyyyMmDd.split("-").map(Number);
-//   const dt = new Date(Date.UTC(y, m-1, d, 0,0,0,0));
-//   return Number.isNaN(dt.getTime()) ? null : dt;
-// };
+// Helper functions
+const toMin = (t) => {
+  const [H, M] = t.split(":").map(Number);
+  return H * 60 + M;
+};
 
+const buildUTCDate = (yyyyMmDd) => {
+  const [y, m, d] = yyyyMmDd.split("-").map(Number);
+  const dt = new Date(Date.UTC(y, m - 1, d, 0, 0, 0, 0));
+  return Number.isNaN(dt.getTime()) ? null : dt;
+};
+
+// Create schedule function
 export const createSchedule = async (req, res) => {
   try {
     const { patient, bed, date, startTime, endTime } = req.body;
@@ -19,17 +26,16 @@ export const createSchedule = async (req, res) => {
     if (!patient || !bed || !date || !startTime || !endTime)
       return res.status(400).json({ message: "Missing required fields" });
 
-    const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
-    const TIME_RE = /^([01]\d|2[0-3]):[0-5]\d$/;
-
+    // Validate date and time format
     if (!DATE_RE.test(date) || !TIME_RE.test(startTime) || !TIME_RE.test(endTime))
       return res.status(400).json({ message: "Invalid date/time format" });
 
+    // Build the schedule date
     const [y, m, d] = date.split("-").map(Number);
     const scheduleDate = new Date(Date.UTC(y, m - 1, d, 0, 0, 0));
 
-    const start = parseInt(startTime.split(":")[0]) * 60 + parseInt(startTime.split(":")[1]);
-    const end = parseInt(endTime.split(":")[0]) * 60 + parseInt(endTime.split(":")[1]);
+    const start = toMin(startTime);
+    const end = toMin(endTime);
 
     if (start >= end)
       return res.status(400).json({ message: "startTime must be before endTime" });
@@ -50,8 +56,22 @@ export const createSchedule = async (req, res) => {
     if (overlap)
       return res.status(400).json({ message: `Bed ${bedDoc.name} already booked for that time.` });
 
-    // ✅ Create Schedule
-    const schedule = await Schedule.create({ patient, bed, date: scheduleDate, startTime, endTime });
+    // 🧩 Check if today, update the bed status if necessary
+    const today = new Date();
+    if (scheduleDate.toDateString() === today.toDateString()) {
+      await Bed.findByIdAndUpdate(bed, { status: "Busy" });
+    }
+
+    // ✅ Create the schedule
+    const schedule = await Schedule.create({
+      patient,
+      bed,
+      date: scheduleDate,
+      startTime,
+      endTime
+    });
+
+    // Mark the bed as busy
     await Bed.findByIdAndUpdate(bed, { status: "Busy" });
 
     res.status(201).json({ message: "✅ Schedule created successfully.", schedule });
@@ -61,6 +81,7 @@ export const createSchedule = async (req, res) => {
   }
 };
 
+// Get all schedules
 export const getSchedules = async (req, res) => {
   try {
     const schedules = await Schedule.find()
@@ -74,25 +95,26 @@ export const getSchedules = async (req, res) => {
   }
 };
 
+// Get a specific schedule by ID
 export const getSchedule = async (req, res) => {
   const schedule = await Schedule.findById(req.params.id)
     .populate("patient")
     .populate("nurse");
+
   if (!schedule) return res.status(404).json({ message: "Schedule not found" });
   res.json(schedule);
 };
 
-
+// Update schedule details
 export const updateSchedule = async (req, res) => {
   try {
     const allowedForNurse = ["status", "cancel"];
     const updates = req.body;
 
-    // role-based field filter
+    // Role-based field filter for nurse
     if (req.user.role === "Nurse") {
       Object.keys(updates).forEach(key => {
-        if (!allowedForNurse.includes(key))
-          delete updates[key];
+        if (!allowedForNurse.includes(key)) delete updates[key];
       });
     }
 
@@ -108,13 +130,14 @@ export const updateSchedule = async (req, res) => {
   }
 };
 
+// Delete schedule by ID
 export const deleteSchedule = async (req, res) => {
   const schedule = await Schedule.findByIdAndDelete(req.params.id);
   if (!schedule) return res.status(404).json({ message: "Schedule not found" });
   res.json({ message: "Deleted" });
 };
 
-
+// Delete all schedules with confirmation
 export const deleteAllSchedules = async (req, res) => {
   try {
     if (req.query.confirm !== "true") {
@@ -134,7 +157,7 @@ export const deleteAllSchedules = async (req, res) => {
   }
 };
 
-
+// Request cancel schedule
 export const requestCancel = async (req, res) => {
   const { reason } = req.body || {};
   const schedule = await Schedule.findByIdAndUpdate(
@@ -146,6 +169,7 @@ export const requestCancel = async (req, res) => {
   res.json({ message: "Cancellation requested", schedule });
 };
 
+// Approve cancel schedule and free the bed
 export const approveCancel = async (req, res) => {
   const schedule = await Schedule.findByIdAndUpdate(
     req.params.id,
@@ -153,10 +177,7 @@ export const approveCancel = async (req, res) => {
     { new: true }
   );
   if (!schedule) return res.status(404).json({ message: "Schedule not found" });
-  // free the bed immediately
+  // Free the bed immediately
   await Bed.findByIdAndUpdate(schedule.bed, { status: "Available" });
   res.json({ message: "Cancellation approved", schedule });
 };
-
-
-

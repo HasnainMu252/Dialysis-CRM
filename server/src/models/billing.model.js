@@ -7,7 +7,7 @@ const billingSchema = new mongoose.Schema(
     cptCodes: [{ code: String, amount: Number }],
     payer: String,
     total: Number,
-    status: { type: String, enum: ["Draft", "Submitted", "Paid", "Denied"], default: "Draft" },
+    status: { type: String, enum: ["Pending", "Paid", "Unpaid"], default: "Unpaid" },
     notes: String,
   },
   { timestamps: true }
