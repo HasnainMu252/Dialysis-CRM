@@ -1,4 +1,5 @@
 import Schedule from "../models/schedule.model.js";
+import Patient from "../models/patient.model.js";
 import { setTimeout as wait } from "timers/promises";
 import Bed from "../models/bed.model.js";
 
@@ -18,17 +19,23 @@ const buildUTCDate = (yyyyMmDd) => {
   return Number.isNaN(dt.getTime()) ? null : dt;
 };
 
-// Create schedule function
+// Create schedule function using MRN
 export const createSchedule = async (req, res) => {
   try {
-    const { patient, bed, date, startTime, endTime } = req.body;
+    const { patientMrn, bed, date, startTime, endTime } = req.body;
 
-    if (!patient || !bed || !date || !startTime || !endTime)
+    if (!patientMrn || !bed || !date || !startTime || !endTime)
       return res.status(400).json({ message: "Missing required fields" });
 
     // Validate date and time format
     if (!DATE_RE.test(date) || !TIME_RE.test(startTime) || !TIME_RE.test(endTime))
       return res.status(400).json({ message: "Invalid date/time format" });
+
+    // Verify patient exists by MRN
+    const patient = await Patient.findOne({ mrn: patientMrn });
+    if (!patient) {
+      return res.status(404).json({ message: "Patient not found with the provided MRN" });
+    }
 
     // Build the schedule date
     const [y, m, d] = date.split("-").map(Number);
@@ -62,9 +69,10 @@ export const createSchedule = async (req, res) => {
       await Bed.findByIdAndUpdate(bed, { status: "Busy" });
     }
 
-    // ✅ Create the schedule
+    // ✅ Create the schedule with MRN
     const schedule = await Schedule.create({
-      patient,
+      patientMrn,
+      patient: patient._id, // Keep both for flexibility
       bed,
       date: scheduleDate,
       startTime,
@@ -84,9 +92,17 @@ export const createSchedule = async (req, res) => {
 // Get all schedules
 export const getSchedules = async (req, res) => {
   try {
-    const schedules = await Schedule.find()
-      .populate("patient", "firstName lastName mrn")
-      .populate("bed", "name status")
+    const { patientMrn, date, status } = req.query;
+    const filter = {};
+
+    // Add filters if provided
+    if (patientMrn) filter.patientMrn = patientMrn;
+    if (date) filter.date = new Date(date);
+    if (status) filter.status = status;
+
+    const schedules = await Schedule.find(filter)
+      .populate("patient", "firstName lastName mrn phone")
+      .populate("bed", "name status type")
       .sort({ date: 1, startTime: 1 });
 
     res.json(schedules);
@@ -95,14 +111,47 @@ export const getSchedules = async (req, res) => {
   }
 };
 
+// Get schedules by patient MRN
+export const getSchedulesByPatientMrn = async (req, res) => {
+  try {
+    const { mrn } = req.params;
+    
+    // Verify patient exists
+    const patient = await Patient.findOne({ mrn });
+    if (!patient) {
+      return res.status(404).json({ message: "Patient not found" });
+    }
+
+    const schedules = await Schedule.find({ patientMrn: mrn })
+      .populate("bed", "name status type number")
+      .populate("patient", "firstName lastName mrn phone")
+      .sort({ date: -1, startTime: 1 });
+
+    res.json({
+      patient: {
+        mrn: patient.mrn,
+        firstName: patient.firstName,
+        lastName: patient.lastName
+      },
+      schedules
+    });
+  } catch (err) {
+    res.status(500).json({ message: "Server error", error: err.message });
+  }
+};
+
 // Get a specific schedule by ID
 export const getSchedule = async (req, res) => {
-  const schedule = await Schedule.findById(req.params.id)
-    .populate("patient")
-    .populate("nurse");
+  try {
+    const schedule = await Schedule.findById(req.params.id)
+      .populate("patient", "firstName lastName mrn phone email")
+      .populate("bed", "name status type number");
 
-  if (!schedule) return res.status(404).json({ message: "Schedule not found" });
-  res.json(schedule);
+    if (!schedule) return res.status(404).json({ message: "Schedule not found" });
+    res.json(schedule);
+  } catch (err) {
+    res.status(500).json({ message: "Server error", error: err.message });
+  }
 };
 
 // Update schedule details
@@ -111,16 +160,28 @@ export const updateSchedule = async (req, res) => {
     const allowedForNurse = ["status", "cancel"];
     const updates = req.body;
 
+    // If updating patientMrn, verify the patient exists
+    if (updates.patientMrn) {
+      const patient = await Patient.findOne({ mrn: updates.patientMrn });
+      if (!patient) {
+        return res.status(404).json({ message: "Patient not found with the provided MRN" });
+      }
+      updates.patient = patient._id; // Update the ObjectId reference as well
+    }
+
     // Role-based field filter for nurse
-    if (req.user.role === "Nurse") {
+    if (req.user?.role === "Nurse") {
       Object.keys(updates).forEach(key => {
         if (!allowedForNurse.includes(key)) delete updates[key];
       });
     }
 
-    const schedule = await Schedule.findByIdAndUpdate(req.params.id, updates, { new: true })
-      .populate("patient", "firstName lastName mrn")
-      .populate("bed", "name status");
+    const schedule = await Schedule.findByIdAndUpdate(req.params.id, updates, { 
+      new: true,
+      runValidators: true 
+    })
+      .populate("patient", "firstName lastName mrn phone")
+      .populate("bed", "name status type");
 
     if (!schedule) return res.status(404).json({ message: "Schedule not found" });
 
@@ -132,9 +193,17 @@ export const updateSchedule = async (req, res) => {
 
 // Delete schedule by ID
 export const deleteSchedule = async (req, res) => {
-  const schedule = await Schedule.findByIdAndDelete(req.params.id);
-  if (!schedule) return res.status(404).json({ message: "Schedule not found" });
-  res.json({ message: "Deleted" });
+  try {
+    const schedule = await Schedule.findByIdAndDelete(req.params.id);
+    if (!schedule) return res.status(404).json({ message: "Schedule not found" });
+    
+    // Free the bed when schedule is deleted
+    await Bed.findByIdAndUpdate(schedule.bed, { status: "Available" });
+    
+    res.json({ message: "Schedule deleted successfully" });
+  } catch (err) {
+    res.status(500).json({ message: "Server error", error: err.message });
+  }
 };
 
 // Delete all schedules with confirmation
@@ -147,6 +216,10 @@ export const deleteAllSchedules = async (req, res) => {
     }
 
     const result = await Schedule.deleteMany({});
+    
+    // Free all beds
+    await Bed.updateMany({}, { status: "Available" });
+    
     return res.json({
       message: "🗑️ All schedule records deleted successfully.",
       deletedCount: result.deletedCount
@@ -159,25 +232,83 @@ export const deleteAllSchedules = async (req, res) => {
 
 // Request cancel schedule
 export const requestCancel = async (req, res) => {
-  const { reason } = req.body || {};
-  const schedule = await Schedule.findByIdAndUpdate(
-    req.params.id,
-    { status: "Cancelled", "cancel.requested": true, "cancel.reason": reason || "N/A" },
-    { new: true }
-  );
-  if (!schedule) return res.status(404).json({ message: "Schedule not found" });
-  res.json({ message: "Cancellation requested", schedule });
+  try {
+    const { reason } = req.body || {};
+    const schedule = await Schedule.findByIdAndUpdate(
+      req.params.id,
+      { 
+        status: "Cancelled", 
+        "cancel.requested": true, 
+        "cancel.reason": reason || "N/A" 
+      },
+      { new: true }
+    ).populate("bed", "name status");
+    
+    if (!schedule) return res.status(404).json({ message: "Schedule not found" });
+    
+    // Free the bed when cancelled
+    await Bed.findByIdAndUpdate(schedule.bed, { status: "Available" });
+    
+    res.json({ message: "Cancellation requested", schedule });
+  } catch (err) {
+    res.status(500).json({ message: "Server error", error: err.message });
+  }
 };
 
 // Approve cancel schedule and free the bed
 export const approveCancel = async (req, res) => {
-  const schedule = await Schedule.findByIdAndUpdate(
-    req.params.id,
-    { "cancel.approved": true },
-    { new: true }
-  );
-  if (!schedule) return res.status(404).json({ message: "Schedule not found" });
-  // Free the bed immediately
-  await Bed.findByIdAndUpdate(schedule.bed, { status: "Available" });
-  res.json({ message: "Cancellation approved", schedule });
+  try {
+    const schedule = await Schedule.findByIdAndUpdate(
+      req.params.id,
+      { "cancel.approved": true },
+      { new: true }
+    ).populate("bed", "name status");
+    
+    if (!schedule) return res.status(404).json({ message: "Schedule not found" });
+    
+    // Free the bed immediately
+    await Bed.findByIdAndUpdate(schedule.bed, { status: "Available" });
+    
+    res.json({ message: "Cancellation approved", schedule });
+  } catch (err) {
+    res.status(500).json({ message: "Server error", error: err.message });
+  }
+};
+
+// Get today's schedules
+export const getTodaySchedules = async (req, res) => {
+  try {
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+
+    const schedules = await Schedule.find({ date: today })
+      .populate("patient", "firstName lastName mrn phone")
+      .populate("bed", "name status type number")
+      .sort({ startTime: 1 });
+
+    res.json(schedules);
+  } catch (err) {
+    res.status(500).json({ message: "Server error", error: err.message });
+  }
+};
+
+// Get upcoming schedules
+export const getUpcomingSchedules = async (req, res) => {
+  try {
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+
+    const schedules = await Schedule.find({ 
+      date: { $gte: today },
+      status: { $in: ["Scheduled", "InProgress"] }
+    })
+      .populate("patient", "firstName lastName mrn phone")
+      .populate("bed", "name status type number")
+      .sort({ date: 1, startTime: 1 })
+      .limit(50);
+
+    res.json(schedules);
+  } catch (err) {
+    res.status(500).json({ message: "Server error", error: err.message });
+  }
 };

@@ -1,14 +1,15 @@
 import mongoose from "mongoose";
+import Counter from "./counter.model.js";   // import counter model
 
 const dialysisSchema = new mongoose.Schema({
   modality: {
     type: String,
-    enum: ["HD", "PD"], // "HD" and "PD" as the valid enum values
+    enum: ["HD", "PD"],
     required: true,
   },
   shift: {
     type: String,
-    enum: ["Morning", "Evening"], // "Morning" and "Evening" as valid shift values
+    enum: ["Morning", "Evening"],
     required: true,
   },
   scheduleDays: {
@@ -18,9 +19,15 @@ const dialysisSchema = new mongoose.Schema({
   },
 });
 
+// ====== HELPER FUNCTION ======
+function formatMRN(number) {
+  return `MRN-${number.toString().padStart(6, "0")}`;
+}
+
+// ====== PATIENT SCHEMA ======
 const patientSchema = new mongoose.Schema(
   {
-    mrn: { type: String, required: true, unique: true },
+    mrn: { type: String, unique: true },   // REMOVE required:true
     firstName: { type: String, required: true },
     lastName: { type: String, required: true },
     dob: { type: Date, required: true },
@@ -38,5 +45,25 @@ const patientSchema = new mongoose.Schema(
   },
   { timestamps: true }
 );
+
+
+
+// ✅ AUTO-GENERATE MRN BEFORE SAVE
+patientSchema.pre("save", async function (next) {
+  if (this.mrn) return next();  // already exists, skip
+
+  try {
+    const counter = await Counter.findOneAndUpdate(
+      { name: "patient_mrn" },
+      { $inc: { seq: 1 } },
+      { new: true, upsert: true }
+    );
+
+    this.mrn = formatMRN(counter.seq);
+    next();
+  } catch (error) {
+    next(error);
+  }
+});
 
 export default mongoose.model("Patient", patientSchema);

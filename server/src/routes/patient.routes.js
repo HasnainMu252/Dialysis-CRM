@@ -9,9 +9,10 @@ router.use(requireAuth);
 
 router.get("/", listPatients);
 router.post("/", authorizeRoles("Admin", "CaseManager"), createPatient);
-router.get("/:id",  getPatient);
-router.put("/:id", authorizeRoles("Admin", "CaseManager"), updatePatient);
-router.delete("/:id", authorizeRoles("Admin"), removePatient);
+router.get("/:mrn",  getPatient);
+router.put("/:mrn", authorizeRoles("Admin", "CaseManager"), updatePatient);
+router.delete("/:mrn", authorizeRoles("Admin"), removePatient);
+
 
 
 // 🔥 bulk delete (Admin only) with guard
