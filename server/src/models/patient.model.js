@@ -1,5 +1,6 @@
+// models/patient.model.js
 import mongoose from "mongoose";
-import Counter from "./counter.model.js";   // import counter model
+import Counter from "./counter.model.js";
 
 const dialysisSchema = new mongoose.Schema({
   modality: {
@@ -19,15 +20,14 @@ const dialysisSchema = new mongoose.Schema({
   },
 });
 
-// ====== HELPER FUNCTION ======
+// helper
 function formatMRN(number) {
   return `MRN-${number.toString().padStart(6, "0")}`;
 }
 
-// ====== PATIENT SCHEMA ======
 const patientSchema = new mongoose.Schema(
   {
-    mrn: { type: String, unique: true },   // REMOVE required:true
+    mrn: { type: String, unique: true }, // not required (auto)
     firstName: { type: String, required: true },
     lastName: { type: String, required: true },
     dob: { type: Date, required: true },
@@ -41,16 +41,18 @@ const patientSchema = new mongoose.Schema(
       groupNumber: { type: String },
     },
     dialysis: dialysisSchema,
-    status: { type: String, enum: ["Active", "Inactive"], default: "Active" },
+    status: {
+      type: String,
+      enum: ["Active", "Inactive"],
+      default: "Active",
+    },
   },
   { timestamps: true }
 );
 
-
-
-// ✅ AUTO-GENERATE MRN BEFORE SAVE
+// Auto-generate MRN
 patientSchema.pre("save", async function (next) {
-  if (this.mrn) return next();  // already exists, skip
+  if (this.mrn) return next();
 
   try {
     const counter = await Counter.findOneAndUpdate(

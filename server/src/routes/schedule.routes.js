@@ -1,31 +1,82 @@
+// routes/schedule.routes.js
 import { Router } from "express";
-import { requireAuth, authorizeRoles } from "../middleware/auth.js";
 import {
-  createSchedule, getSchedules, getSchedule,
-  updateSchedule, deleteSchedule,
-  deleteAllSchedules, requestCancel, approveCancel
+  createSchedule,
+  getSchedules,
+  getTodaySchedules,
+  getUpcomingSchedules,
+  getSchedulesByPatientMrn,
+  getSchedule,
+  updateSchedule,
+  deleteSchedule,
+  deleteAllSchedules,
+  requestCancel,
+  approveCancel
 } from "../controllers/schedule.controller.js";
 
 const router = Router();
 
-router.use(requireAuth);
+/* ================================
+   📌 CREATE SCHEDULE
+   MRN + bedCode required
+================================ */
+router.post("/", createSchedule);
 
-// list/get
+/* ================================
+   📌 GET SCHEDULES LIST
+   Query Supported:
+   - patientMrn
+   - date
+   - status
+   - bed (MongoId)
+   - bedCode
+================================ */
 router.get("/", getSchedules);
+
+/* ================================
+   📌 TODAY’S SCHEDULES ONLY
+================================ */
+router.get("/today", getTodaySchedules);
+
+/* ================================
+   📌 UPCOMING SCHEDULES
+================================ */
+router.get("/upcoming", getUpcomingSchedules);
+
+/* ================================
+   📌 GET SCHEDULES BY PATIENT MRN
+================================ */
+router.get("/patient/:mrn", getSchedulesByPatientMrn);
+
+/* ================================
+   📌 GET SINGLE SCHEDULE BY ID
+================================ */
 router.get("/:id", getSchedule);
 
-// create (Admin/CaseManager)
-router.post("/", authorizeRoles("Admin","CaseManager"), createSchedule);
+/* ================================
+   📌 UPDATE SCHEDULE BY ID
+================================ */
+router.patch("/:id", updateSchedule);
 
-// update: nurse can update status; Admin/CaseManager too
-router.put("/:id", authorizeRoles("Nurse","Admin","CaseManager"), updateSchedule);
+/* ================================
+   📌 DELETE SINGLE SCHEDULE
+================================ */
+router.delete("/:id", deleteSchedule);
 
-// cancel flow
-router.put("/:id/request-cancel", authorizeRoles("Nurse","Admin","CaseManager"), requestCancel);
-router.put("/:id/approve-cancel", authorizeRoles("Admin","CaseManager"), approveCancel);
+/* ================================
+   ⚠️ DELETE ALL SCHEDULES
+   Use: /api/schedules?confirm=true
+================================ */
+router.delete("/", deleteAllSchedules);
 
-// deletes
-router.delete("/:id", authorizeRoles("Admin"), deleteSchedule);
-router.delete("/", authorizeRoles("Admin"), deleteAllSchedules);
+/* ================================
+   📌 REQUEST CANCEL
+================================ */
+router.patch("/:id/cancel", requestCancel);
+
+/* ================================
+   📌 APPROVE CANCEL REQUEST
+================================ */
+router.patch("/:id/cancel/approve", approveCancel);
 
 export default router;
