@@ -19,4 +19,5 @@ router.delete("/:mrn", authorizeRoles("Admin"), removePatient);
 router.delete("/", authorizeRoles("Admin"), deleteAllPatients);
 
 
+
 export default router;

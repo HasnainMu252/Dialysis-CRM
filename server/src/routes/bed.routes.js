@@ -7,24 +7,48 @@ import {
   updateBedByCode,
   deleteBedByCode,
   updateBedStatus,
+  deleteAllBeds
 } from "../controllers/bed.controller.js";
 
 const router = Router();
 
+// All bed routes require authentication
 router.use(requireAuth);
 
-// GET routes
-router.get("/", getBeds); // Can use ?status=Available&type=ICU
-router.get("/:code", getBedByCode); // Get specific bed by ID (bed-001)
+//
+// ─────────────── GET ───────────────
+//
 
-// POST routes (Admin only)
+// List all beds
+router.get("/", getBeds);
+
+// Get single bed by code
+router.get("/:code", getBedByCode);
+
+//
+// ─────────────── POST (ADMIN) ───────────────
+//
+
 router.post("/", authorizeRoles("Admin"), createBed);
 
-// PUT routes (Admin only)
+//
+// ─────────────── PUT / PATCH (ADMIN or SPECIAL) ───────────────
+//
+
+// Update entire bed (admin only)
 router.put("/:code", authorizeRoles("Admin"), updateBedByCode);
 
-// DELETE routes (Admin only)
-router.delete("/:code", authorizeRoles("Admin"), deleteBedByCode);
+// Update bed status (example: admin OR nurse)
 router.patch("/:code/status", updateBedStatus);
+
+//
+// ─────────────── DELETE ───────────────
+//
+
+// DELETE ALL beds (Admin only, requires ?confirm=true)
+router.delete("/", authorizeRoles("Admin"), deleteAllBeds);
+
+// DELETE single bed
+router.delete("/:code", authorizeRoles("Admin"), deleteBedByCode);
 
 export default router;
