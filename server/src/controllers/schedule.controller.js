@@ -1,3 +1,4 @@
+// src/controllers/schedule.controller.js
 import Schedule from "../models/schedule.model.js";
 import Patient from "../models/patient.model.js";
 import Bed from "../models/bed.model.js";
@@ -12,6 +13,52 @@ const toMin = (t) => {
   return H * 60 + M;
 };
 
+// 🔹 Format schedule object for clean API response
+const formatSchedule = (doc) => {
+  if (!doc) return null;
+  const s = doc.toJSON ? doc.toJSON() : doc;
+
+  const fullName =
+    s.patient && (s.patient.firstName || s.patient.lastName)
+      ? `${s.patient.firstName || ""} ${s.patient.lastName || ""}`.trim()
+      : undefined;
+
+  return {
+    // Human readable + internal ids
+    scheduleId: s.scheduleId,      // virtual from model: SC-XXXX
+    id: s._id,                     // Mongo _id
+
+    // Patient summary
+    patientMrn: s.patientMrn,
+    patientName: fullName,
+    patientPhone: s.patient?.phone,
+
+    // Bed summary
+    bedCode: s.bedCode,
+    bedName: s.bed?.name,
+    bedType: s.bed?.type,
+    bedStatus: s.bed?.status,
+
+    // Core schedule info
+    date: s.date,
+    startTime: s.startTime,
+    endTime: s.endTime,
+    status: s.status,
+    cancel: s.cancel,
+
+    createdAt: s.createdAt,
+    updatedAt: s.updatedAt,
+
+    // Full populated objects (if frontend needs details)
+    patient: s.patient,
+    bed: s.bed,
+  };
+};
+
+/**
+ * CREATE SCHEDULE
+ * Body: { patientMrn, bedCode, date(YYYY-MM-DD), startTime(HH:MM), endTime(HH:MM), status? }
+ */
 export const createSchedule = async (req, res) => {
   try {
     const { patientMrn, bedCode, date, startTime, endTime, status } = req.body;
@@ -33,14 +80,16 @@ export const createSchedule = async (req, res) => {
       });
     }
 
-    // 3) Build scheduleDate and check past date
+    // 3) Build scheduleDate (UTC midnight) and check past date
     const [y, m, d] = date.split("-").map(Number);
-    const scheduleDate = new Date(Date.UTC(y, m - 1, d, 0, 0, 0)); // 👈 NOW DEFINED
+    const scheduleDate = new Date(Date.UTC(y, m - 1, d, 0, 0, 0));
 
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
+    const now = new Date();
+    const todayUTC = new Date(
+      Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate(), 0, 0, 0)
+    );
 
-    if (scheduleDate < today) {
+    if (scheduleDate < todayUTC) {
       return res.status(400).json({
         success: false,
         message: "Cannot create schedule in the past.",
@@ -98,7 +147,7 @@ export const createSchedule = async (req, res) => {
     }
 
     // 8) If schedule is for today, mark bed Busy
-    if (scheduleDate.getTime() === today.getTime()) {
+    if (scheduleDate.getTime() === todayUTC.getTime()) {
       await Bed.findByIdAndUpdate(bedDoc._id, { status: "Busy" });
     }
 
@@ -106,8 +155,8 @@ export const createSchedule = async (req, res) => {
     const schedule = await Schedule.create({
       patientMrn,
       patient: patient._id,
-      bedCode,         // string, e.g. BED-000001    (must exist in model)
-      bed: bedDoc._id, // ObjectId ref to Bed       (for populate)
+      bedCode, // string, e.g. BED-000001
+      bed: bedDoc._id,
       date: scheduleDate,
       startTime,
       endTime,
@@ -130,7 +179,7 @@ export const createSchedule = async (req, res) => {
     return res.status(201).json({
       success: true,
       message: "✅ Schedule created successfully.",
-      schedule: populatedSchedule,
+      schedule: formatSchedule(populatedSchedule),
     });
   } catch (err) {
     console.error("createSchedule error:", err);
@@ -151,19 +200,34 @@ export const createSchedule = async (req, res) => {
     });
   }
 };
-// Get all schedules with filtering
+
+/**
+ * GET ALL SCHEDULES WITH FILTERS
+ * Query: patientMrn, date, status, bed (ObjectId), bedCode
+ */
 export const getSchedules = async (req, res) => {
   try {
     const { patientMrn, date, status, bed, bedCode } = req.query;
     const filter = {};
 
     if (patientMrn) filter.patientMrn = patientMrn;
-    if (date) filter.date = new Date(date);
+
+    if (date) {
+      if (!DATE_RE.test(date)) {
+        return res.status(400).json({
+          success: false,
+          message: "Invalid date format. Use YYYY-MM-DD",
+        });
+      }
+      const [y, m, d] = date.split("-").map(Number);
+      filter.date = new Date(Date.UTC(y, m - 1, d, 0, 0, 0));
+    }
+
     if (status) filter.status = status;
 
-    // 🔹 Allow filtering by bedId or bedCode
+    // Filter by bed id or bedCode
     if (bed) {
-      filter.bed = bed; // expecting Mongo _id from client
+      filter.bed = bed; // expecting Mongo _id
     } else if (bedCode) {
       const bedDoc = await Bed.findOne({ code: bedCode });
       if (bedDoc) filter.bed = bedDoc._id;
@@ -192,7 +256,7 @@ export const getSchedules = async (req, res) => {
     res.json({
       success: true,
       count: schedules.length,
-      schedules,
+      schedules: schedules.map(formatSchedule),
     });
   } catch (err) {
     res.status(500).json({
@@ -203,13 +267,17 @@ export const getSchedules = async (req, res) => {
   }
 };
 
-// Get today's schedules
+/**
+ * GET TODAY'S SCHEDULES
+ */
 export const getTodaySchedules = async (req, res) => {
   try {
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
+    const now = new Date();
+    const todayUTC = new Date(
+      Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate(), 0, 0, 0)
+    );
 
-    const schedules = await Schedule.find({ date: today })
+    const schedules = await Schedule.find({ date: todayUTC })
       .populate({
         path: "patient",
         select: "firstName lastName mrn phone",
@@ -224,9 +292,9 @@ export const getTodaySchedules = async (req, res) => {
 
     res.json({
       success: true,
-      date: today.toISOString().split("T")[0],
+      date: todayUTC.toISOString().split("T")[0],
       count: schedules.length,
-      schedules,
+      schedules: schedules.map(formatSchedule),
     });
   } catch (err) {
     res.status(500).json({
@@ -237,14 +305,18 @@ export const getTodaySchedules = async (req, res) => {
   }
 };
 
-// Get upcoming schedules
+/**
+ * GET UPCOMING SCHEDULES
+ */
 export const getUpcomingSchedules = async (req, res) => {
   try {
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
+    const now = new Date();
+    const todayUTC = new Date(
+      Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate(), 0, 0, 0)
+    );
 
     const schedules = await Schedule.find({
-      date: { $gte: today },
+      date: { $gte: todayUTC },
       status: { $in: ["Scheduled", "InProgress"] },
     })
       .populate({
@@ -263,7 +335,7 @@ export const getUpcomingSchedules = async (req, res) => {
     res.json({
       success: true,
       count: schedules.length,
-      schedules,
+      schedules: schedules.map(formatSchedule),
     });
   } catch (err) {
     res.status(500).json({
@@ -274,7 +346,9 @@ export const getUpcomingSchedules = async (req, res) => {
   }
 };
 
-// Get schedules by patient MRN
+/**
+ * GET SCHEDULES BY PATIENT MRN
+ */
 export const getSchedulesByPatientMrn = async (req, res) => {
   try {
     const { mrn } = req.params;
@@ -310,7 +384,7 @@ export const getSchedulesByPatientMrn = async (req, res) => {
         phone: patient.phone,
       },
       count: schedules.length,
-      schedules,
+      schedules: schedules.map(formatSchedule),
     });
   } catch (err) {
     res.status(500).json({
@@ -321,7 +395,9 @@ export const getSchedulesByPatientMrn = async (req, res) => {
   }
 };
 
-// Get a specific schedule by ID
+/**
+ * GET SINGLE SCHEDULE BY ID
+ */
 export const getSchedule = async (req, res) => {
   try {
     const schedule = await Schedule.findById(req.params.id)
@@ -344,7 +420,7 @@ export const getSchedule = async (req, res) => {
 
     res.json({
       success: true,
-      schedule,
+      schedule: formatSchedule(schedule),
     });
   } catch (err) {
     res.status(500).json({
@@ -355,7 +431,9 @@ export const getSchedule = async (req, res) => {
   }
 };
 
-// Update schedule details
+/**
+ * UPDATE SCHEDULE
+ */
 export const updateSchedule = async (req, res) => {
   try {
     const allowedForNurse = ["status", "cancel"];
@@ -378,9 +456,20 @@ export const updateSchedule = async (req, res) => {
       }
       const [y, m, d] = updates.date.split("-").map(Number);
       const newDate = new Date(Date.UTC(y, m - 1, d, 0, 0, 0));
-      const today = new Date();
-      today.setHours(0, 0, 0, 0);
-      if (newDate < today) {
+
+      const now = new Date();
+      const todayUTC = new Date(
+        Date.UTC(
+          now.getUTCFullYear(),
+          now.getUTCMonth(),
+          now.getUTCDate(),
+          0,
+          0,
+          0
+        )
+      );
+
+      if (newDate < todayUTC) {
         return res.status(400).json({
           success: false,
           message: "Cannot move schedule into the past.",
@@ -440,7 +529,7 @@ export const updateSchedule = async (req, res) => {
     res.json({
       success: true,
       message: "✅ Schedule updated.",
-      schedule,
+      schedule: formatSchedule(schedule),
     });
   } catch (err) {
     console.error("updateSchedule error:", err);
@@ -459,7 +548,9 @@ export const updateSchedule = async (req, res) => {
   }
 };
 
-// Delete schedule by ID
+/**
+ * DELETE SINGLE SCHEDULE
+ */
 export const deleteSchedule = async (req, res) => {
   try {
     const schedule = await Schedule.findByIdAndDelete(req.params.id);
@@ -487,7 +578,9 @@ export const deleteSchedule = async (req, res) => {
   }
 };
 
-// Delete all schedules with confirmation
+/**
+ * DELETE ALL SCHEDULES (requires ?confirm=true)
+ */
 export const deleteAllSchedules = async (req, res) => {
   try {
     if (req.query.confirm !== "true") {
@@ -518,7 +611,9 @@ export const deleteAllSchedules = async (req, res) => {
   }
 };
 
-// Request cancel schedule
+/**
+ * REQUEST CANCEL
+ */
 export const requestCancel = async (req, res) => {
   try {
     const { reason } = req.body || {};
@@ -538,7 +633,7 @@ export const requestCancel = async (req, res) => {
       })
       .populate({
         path: "patient",
-        select: "firstName lastName mrn",
+        select: "firstName lastName mrn phone",
         strictPopulate: false,
       });
 
@@ -551,7 +646,7 @@ export const requestCancel = async (req, res) => {
     res.json({
       success: true,
       message: "Cancellation requested",
-      schedule,
+      schedule: formatSchedule(schedule),
     });
   } catch (err) {
     res.status(500).json({
@@ -562,7 +657,9 @@ export const requestCancel = async (req, res) => {
   }
 };
 
-// Approve cancel schedule and free the bed
+/**
+ * APPROVE CANCEL & FREE BED
+ */
 export const approveCancel = async (req, res) => {
   try {
     const schedule = await Schedule.findByIdAndUpdate(
@@ -577,7 +674,7 @@ export const approveCancel = async (req, res) => {
       })
       .populate({
         path: "patient",
-        select: "firstName lastName mrn",
+        select: "firstName lastName mrn phone",
         strictPopulate: false,
       });
 
@@ -595,7 +692,7 @@ export const approveCancel = async (req, res) => {
     res.json({
       success: true,
       message: "Cancellation approved",
-      schedule,
+      schedule: formatSchedule(schedule),
     });
   } catch (err) {
     res.status(500).json({
