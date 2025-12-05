@@ -21,7 +21,7 @@ export const createBed = async (req, res) => {
     const existingBed = await Bed.findOne({ code: req.body.code });
     if (existingBed) {
       return res.status(400).json({
-        success: false,
+        success: false,   
         message: "Bed with this code already exists.",
       });
     }
