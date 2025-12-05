@@ -1,10 +1,23 @@
 // models/schedule.model.js
 import mongoose from "mongoose";
+import Counter from "./counter.model.js"; // <-- same pattern as patient.model
 
 export const ScheduleStatus = ["Scheduled", "InProgress", "Completed", "Cancelled"];
 
+// Helper to format human readable schedule code
+function formatScheduleCode(n) {
+  return `SC-${n.toString().padStart(6, "0")}`; // e.g. SC-000001
+}
+
 const scheduleSchema = new mongoose.Schema(
   {
+    // Human readable schedule code, used in URLs
+    code: {
+      type: String,
+      unique: true,
+      index: true,
+    },
+
     patientMrn: {
       type: String,
       ref: "Patient",
@@ -17,36 +30,36 @@ const scheduleSchema = new mongoose.Schema(
       required: true,
     },
 
-    bedCode: { 
-      type: String, 
-      required: true 
+    bedCode: {
+      type: String,
+      required: true,
     },
 
-    bed: { 
-      type: mongoose.Schema.Types.ObjectId, 
-      ref: "Bed", 
-      required: true 
+    bed: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "Bed",
+      required: true,
     },
 
     date: {
       type: Date,
-      required: true
+      required: true,
     },
 
     startTime: {
       type: String,
-      required: true
+      required: true,
     },
 
     endTime: {
       type: String,
-      required: true
+      required: true,
     },
 
     status: {
       type: String,
       enum: ScheduleStatus,
-      default: "Scheduled"
+      default: "Scheduled",
     },
 
     cancel: {
@@ -55,8 +68,8 @@ const scheduleSchema = new mongoose.Schema(
       reason: { type: String },
     },
   },
-  { 
-    timestamps: true
+  {
+    timestamps: true,
   }
 );
 
@@ -66,25 +79,39 @@ scheduleSchema.index(
   { unique: true }
 );
 
-// 🔹 Human-readable virtual ID, e.g. "SC-6BF2"
+// 🔹 Auto-generate human readable schedule code SC-000001
+scheduleSchema.pre("save", async function (next) {
+  if (this.code) return next(); // already set
+
+  try {
+    const counter = await Counter.findOneAndUpdate(
+      { name: "schedule_code" },
+      { $inc: { seq: 1 } },
+      { new: true, upsert: true }
+    );
+    this.code = formatScheduleCode(counter.seq);
+    next();
+  } catch (err) {
+    next(err);
+  }
+});
+
+// 🔹 Virtual alias, for convenience: scheduleId === code
 scheduleSchema.virtual("scheduleId").get(function () {
-  if (!this._id) return null;
-  const short = this._id.toString().slice(-4).toUpperCase();
-  return `SC-${short}`;
+  return this.code || null;
 });
 
 // 🔹 Include virtuals (like scheduleId) in JSON & Object output
 scheduleSchema.set("toJSON", {
   virtuals: true,
   transform: (doc, ret) => {
-    // Hide internal stuff if you want:
     delete ret.__v;
     return ret;
-  }
+  },
 });
 
 scheduleSchema.set("toObject", {
-  virtuals: true
+  virtuals: true,
 });
 
 export default mongoose.model("Schedule", scheduleSchema);

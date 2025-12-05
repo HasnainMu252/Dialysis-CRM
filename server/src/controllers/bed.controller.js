@@ -8,14 +8,48 @@ import Bed from "../models/bed.model.js";
 // POST /api/beds
 export const createBed = async (req, res) => {
   try {
-    const bed = new Bed(req.body); // code auto-generated
-    const saved = await bed.save();
-    res.status(201).json(saved);
-  } catch (err) {
-    res.status(400).json({
+    const { name, type, status, location, capacity, notes } = req.body;
+
+    if (!name || !type || !status || !location || !capacity) {
+      return res.status(400).json({
+        success: false,
+        message: "Missing required fields. Please check your input.",
+      });
+    }
+
+    // Check if a bed with the same code already exists
+    const existingBed = await Bed.findOne({ code: req.body.code });
+    if (existingBed) {
+      return res.status(400).json({
+        success: false,
+        message: "Bed with this code already exists.",
+      });
+    }
+
+    // Create the new bed record
+    const newBed = new Bed({
+      name,
+      type,
+      status,
+      location,
+      capacity,
+      notes,
+    });
+
+    // Save the new bed record
+    await newBed.save();
+
+    return res.status(201).json({
+      success: true,
+      message: "New bed created successfully!",
+      bed: newBed,
+    });
+  } catch (error) {
+    console.error("Error creating bed:", error);
+    return res.status(500).json({
       success: false,
-      message: "Failed to create bed",
-      error: err.message,
+      message: "Server error",
+      error: error.message,
     });
   }
 };

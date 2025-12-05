@@ -25,8 +25,9 @@ const formatSchedule = (doc) => {
 
   return {
     // Human readable + internal ids
-    scheduleId: s.scheduleId,      // virtual from model: SC-XXXX
-    id: s._id,                     // Mongo _id
+    scheduleId: s.scheduleId, // alias for code
+    scheduleCode: s.code,
+    id: s._id, // internal Mongo _id (optional for frontend)
 
     // Patient summary
     patientMrn: s.patientMrn,
@@ -151,11 +152,11 @@ export const createSchedule = async (req, res) => {
       await Bed.findByIdAndUpdate(bedDoc._id, { status: "Busy" });
     }
 
-    // 9) Create schedule – IMPORTANT: pass bedCode + bed _id
+    // 9) Create schedule – schedule.code auto generated in pre("save")
     const schedule = await Schedule.create({
       patientMrn,
       patient: patient._id,
-      bedCode, // string, e.g. BED-000001
+      bedCode,
       bed: bedDoc._id,
       date: scheduleDate,
       startTime,
@@ -396,11 +397,14 @@ export const getSchedulesByPatientMrn = async (req, res) => {
 };
 
 /**
- * GET SINGLE SCHEDULE BY ID
+ * GET SINGLE SCHEDULE BY HUMAN CODE
+ * Route: GET /api/schedules/:code
  */
 export const getSchedule = async (req, res) => {
   try {
-    const schedule = await Schedule.findById(req.params.id)
+    const { code } = req.params;
+
+    const schedule = await Schedule.findOne({ code })
       .populate({
         path: "patient",
         select: "firstName lastName mrn phone email",
@@ -432,10 +436,12 @@ export const getSchedule = async (req, res) => {
 };
 
 /**
- * UPDATE SCHEDULE
+ * UPDATE SCHEDULE BY HUMAN CODE
+ * Route: PATCH /api/schedules/:code
  */
 export const updateSchedule = async (req, res) => {
   try {
+    const { code } = req.params;
     const allowedForNurse = ["status", "cancel"];
     const updates = { ...req.body };
 
@@ -504,8 +510,8 @@ export const updateSchedule = async (req, res) => {
       updates.patient = patient._id;
     }
 
-    const schedule = await Schedule.findByIdAndUpdate(
-      req.params.id,
+    const schedule = await Schedule.findOneAndUpdate(
+      { code },
       updates,
       { new: true, runValidators: true }
     )
@@ -549,11 +555,14 @@ export const updateSchedule = async (req, res) => {
 };
 
 /**
- * DELETE SINGLE SCHEDULE
+ * DELETE SINGLE SCHEDULE BY HUMAN CODE
+ * Route: DELETE /api/schedules/:code
  */
 export const deleteSchedule = async (req, res) => {
   try {
-    const schedule = await Schedule.findByIdAndDelete(req.params.id);
+    const { code } = req.params;
+
+    const schedule = await Schedule.findOneAndDelete({ code });
     if (!schedule)
       return res.status(404).json({
         success: false,
@@ -612,13 +621,16 @@ export const deleteAllSchedules = async (req, res) => {
 };
 
 /**
- * REQUEST CANCEL
+ * REQUEST CANCEL BY HUMAN CODE
+ * Route: PATCH /api/schedules/:code/cancel
  */
 export const requestCancel = async (req, res) => {
   try {
+    const { code } = req.params;
     const { reason } = req.body || {};
-    const schedule = await Schedule.findByIdAndUpdate(
-      req.params.id,
+
+    const schedule = await Schedule.findOneAndUpdate(
+      { code },
       {
         status: "Cancelled",
         "cancel.requested": true,
@@ -658,12 +670,15 @@ export const requestCancel = async (req, res) => {
 };
 
 /**
- * APPROVE CANCEL & FREE BED
+ * APPROVE CANCEL & FREE BED BY HUMAN CODE
+ * Route: PATCH /api/schedules/:code/cancel/approve
  */
 export const approveCancel = async (req, res) => {
   try {
-    const schedule = await Schedule.findByIdAndUpdate(
-      req.params.id,
+    const { code } = req.params;
+
+    const schedule = await Schedule.findOneAndUpdate(
+      { code },
       { "cancel.approved": true },
       { new: true }
     )

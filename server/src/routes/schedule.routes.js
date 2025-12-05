@@ -14,13 +14,23 @@ import {
   approveCancel
 } from "../controllers/schedule.controller.js";
 
+import { requireAuth, authorizeRoles } from "../middleware/auth.js";
+
 const router = Router();
+
+// ✅ All schedule routes require login
+router.use(requireAuth);
 
 /* ================================
    📌 CREATE SCHEDULE
    MRN + bedCode required
+   Allowed: Admin, CaseManager, Nurse
 ================================ */
-router.post("/", createSchedule);
+router.post(
+  "/",
+  authorizeRoles("Admin", "CaseManager", "Nurse"),
+  createSchedule
+);
 
 /* ================================
    📌 GET SCHEDULES LIST
@@ -49,34 +59,57 @@ router.get("/upcoming", getUpcomingSchedules);
 router.get("/patient/:mrn", getSchedulesByPatientMrn);
 
 /* ================================
-   📌 GET SINGLE SCHEDULE BY ID
+   📌 GET SINGLE SCHEDULE BY CODE
+   Example: /api/schedules/SC-000001
 ================================ */
-router.get("/:id", getSchedule);
+router.get("/:code", getSchedule);
 
 /* ================================
-   📌 UPDATE SCHEDULE BY ID
+   📌 UPDATE SCHEDULE BY CODE
 ================================ */
-router.patch("/:id", updateSchedule);
+router.patch(
+  "/:code",
+  authorizeRoles("Admin", "CaseManager", "Nurse"),
+  updateSchedule
+);
 
 /* ================================
-   📌 DELETE SINGLE SCHEDULE
+   📌 DELETE SINGLE SCHEDULE BY CODE
+   Allowed: Admin only
 ================================ */
-router.delete("/:id", deleteSchedule);
+router.delete(
+  "/:code",
+  authorizeRoles("Admin"),
+  deleteSchedule
+);
 
 /* ================================
    ⚠️ DELETE ALL SCHEDULES
    Use: /api/schedules?confirm=true
+   Allowed: Admin only
 ================================ */
-router.delete("/", deleteAllSchedules);
+router.delete(
+  "/",
+  authorizeRoles("Admin"),
+  deleteAllSchedules
+);
 
 /* ================================
-   📌 REQUEST CANCEL
+   📌 REQUEST CANCEL BY CODE
 ================================ */
-router.patch("/:id/cancel", requestCancel);
+router.patch(
+  "/:code/cancel",
+  authorizeRoles("Admin", "CaseManager", "Nurse"),
+  requestCancel
+);
 
 /* ================================
-   📌 APPROVE CANCEL REQUEST
+   📌 APPROVE CANCEL REQUEST BY CODE
 ================================ */
-router.patch("/:id/cancel/approve", approveCancel);
+router.patch(
+  "/:code/cancel/approve",
+  authorizeRoles("Admin", "CaseManager"),
+  approveCancel
+);
 
 export default router;
