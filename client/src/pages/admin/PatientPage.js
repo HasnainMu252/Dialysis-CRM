@@ -1,47 +1,59 @@
+// src/pages/Patients/Patients.jsx  (ya PatientPage.js – naam apne project ke mutabiq rakho)
 import React, { useEffect, useState } from "react";
-import { Table, Button, Modal, Form, Spinner, InputGroup } from "react-bootstrap";
+import {
+  Table,
+  Button,
+  Spinner,
+  InputGroup,
+  Form,
+} from "react-bootstrap";
 import Navbar from "../../components/Navbar";
 import Footer from "../../components/Footer";
 import "../../styles/global.css";
+import AddPatientModal from "../../components/AddPatientModal"; // ⚠️ path apne folder structure ke hisaab se adjust karo
 
 const Patients = () => {
   const [patients, setPatients] = useState([]);
   const [filteredPatients, setFilteredPatients] = useState([]);
   const [loading, setLoading] = useState(true);
+
   const [showModal, setShowModal] = useState(false);
   const [editMode, setEditMode] = useState(false);
-  const [selectedId, setSelectedId] = useState(null);
+  const [selectedPatient, setSelectedPatient] = useState(null);
+
   const [searchTerm, setSearchTerm] = useState("");
   const [currentPage, setCurrentPage] = useState(1);
   const patientsPerPage = 15;
 
   const token = localStorage.getItem("token");
 
-  const [form, setForm] = useState({
-    mrn: "",
-    firstName: "",
-    lastName: "",
-    dob: "",
-    gender: "",
-    phone: "",
-    email: "",
-    address: "",
-    insurance: { provider: "", memberId: "", groupNumber: "" },
-    dialysis: { modality: "", scheduleDays: [], shift: "" },
-    status: "Active",
-  });
-
-  // ---------------- FETCH PATIENTS ----------------
+  // ------------ FETCH PATIENTS ------------
   const fetchPatients = async () => {
     try {
+      setLoading(true);
       const res = await fetch("http://localhost:4000/api/patients", {
-        headers: { Authorization: `Bearer ${token}` },
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
       });
+
       const data = await res.json();
-      setPatients(data);
-      setFilteredPatients(data);
+
+      if (data.success && Array.isArray(data.patients)) {
+        setPatients(data.patients);
+        setFilteredPatients(data.patients);
+      } else if (Array.isArray(data)) {
+        // in case API directly returns array
+        setPatients(data);
+        setFilteredPatients(data);
+      } else {
+        setPatients([]);
+        setFilteredPatients([]);
+      }
     } catch (err) {
-      console.error("Error fetching patients:", err);
+      console.error("Failed to fetch patients:", err);
+      setPatients([]);
+      setFilteredPatients([]);
     } finally {
       setLoading(false);
     }
@@ -49,116 +61,133 @@ const Patients = () => {
 
   useEffect(() => {
     fetchPatients();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // ---------------- SEARCH FUNCTION ----------------
+  // ------------ SEARCH (name + phone + MRN) ------------
   useEffect(() => {
     const term = searchTerm.toLowerCase();
-    const filtered = patients.filter(
-      (p) =>
-        p.firstName?.toLowerCase().includes(term) ||
-        p.lastName?.toLowerCase().includes(term) ||
-        p.mrn?.toString().includes(term) ||
-        p.phone?.includes(term)
-    );
+
+    const filtered = patients.filter((p) => {
+      const firstName = p.firstName?.toLowerCase() || "";
+      const lastName = p.lastName?.toLowerCase() || "";
+      const phone = p.phone || "";
+      const mrn = p.mrn?.toLowerCase() || "";
+
+      return (
+        firstName.includes(term) ||
+        lastName.includes(term) ||
+        phone.includes(term) ||
+        mrn.includes(term)
+      );
+    });
+
     setFilteredPatients(filtered);
     setCurrentPage(1);
   }, [searchTerm, patients]);
 
-  // ---------------- PAGINATION ----------------
-  const indexOfLast = currentPage * patientsPerPage;
-  const indexOfFirst = indexOfLast - patientsPerPage;
-  const currentPatients = filteredPatients.slice(indexOfFirst, indexOfLast);
-  const totalPages = Math.ceil(filteredPatients.length / patientsPerPage);
-
+  // ------------ PAGINATION ------------
   const paginate = (pageNumber) => setCurrentPage(pageNumber);
 
-  // ---------------- ADD NEW PATIENT ----------------
-  const handleAdd = async (e) => {
-    e.preventDefault();
-    try {
-      const res = await fetch("http://localhost:4000/api/patients", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${token}`,
-        },
-        body: JSON.stringify(form),
-      });
-      if (!res.ok) throw new Error("Failed to add patient");
-      setShowModal(false);
-      fetchPatients();
-    } catch (err) {
-      alert(err.message);
-    }
-  };
+  const indexOfLastPatient = currentPage * patientsPerPage;
+  const indexOfFirstPatient = indexOfLastPatient - patientsPerPage;
+  const currentPatients = filteredPatients.slice(
+    indexOfFirstPatient,
+    indexOfLastPatient
+  );
 
-  // ---------------- UPDATE PATIENT ----------------
-  const handleUpdate = async (e) => {
-    e.preventDefault();
-    try {
-      const res = await fetch(
-        `http://localhost:4000/api/patients/${selectedId}`,
-        {
-          method: "PUT",
-          headers: {
-            "Content-Type": "application/json",
-            Authorization: `Bearer ${token}`,
-          },
-          body: JSON.stringify(form),
-        }
-      );
-      if (!res.ok) throw new Error("Failed to update patient");
-      setShowModal(false);
-      fetchPatients();
-    } catch (err) {
-      alert(err.message);
-    }
-  };
-
-  // ---------------- DELETE PATIENT ----------------
-  const handleDelete = async (id) => {
-    if (!window.confirm("Are you sure you want to delete this patient?")) return;
-    try {
-      await fetch(`http://localhost:4000/api/patients/${id}`, {
-        method: "DELETE",
-        headers: { Authorization: `Bearer ${token}` },
-      });
-      fetchPatients();
-    } catch (err) {
-      alert("Failed to delete");
-    }
-  };
-
-  // ---------------- OPEN MODAL ----------------
+  // ------------ MODAL HANDLERS ------------
   const openAddModal = () => {
     setEditMode(false);
-    setForm({
-      mrn: "",
-      firstName: "",
-      lastName: "",
-      dob: "",
-      gender: "",
-      phone: "",
-      email: "",
-      address: "",
-      insurance: { provider: "", memberId: "", groupNumber: "" },
-      dialysis: { modality: "", scheduleDays: [], shift: "" },
-      status: "Active",
-    });
+    setSelectedPatient(null);
     setShowModal(true);
   };
 
   const openEditModal = (patient) => {
     setEditMode(true);
-    setSelectedId(patient._id);
-    setForm(patient);
+    setSelectedPatient(patient); // MRN iss object me hai
     setShowModal(true);
+  };
+
+  const handleCloseModal = () => {
+    setShowModal(false);
+  };
+
+  // ------------ SAVE (ADD / EDIT) USING MRN ------------
+  const handleSavePatient = async (formData) => {
+    try {
+      const isEdit = editMode && selectedPatient?.mrn;
+
+      const url = isEdit
+        ? `http://localhost:4000/api/patients/${selectedPatient.mrn}` // ✅ MRN based
+        : "http://localhost:4000/api/patients";
+
+      const method = isEdit ? "PUT" : "POST";
+
+      const payload = {
+        ...formData,
+        dialysis: {
+          ...formData.dialysis,
+          scheduleDays: Array.isArray(formData.dialysis.scheduleDays)
+            ? formData.dialysis.scheduleDays
+            : [],
+        },
+      };
+
+      const res = await fetch(url, {
+        method,
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify(payload),
+      });
+
+      const json = await res.json().catch(() => ({}));
+
+      if (!res.ok || json.success === false) {
+        throw new Error(json.message || "Failed to save patient");
+      }
+
+      await fetchPatients();
+      setShowModal(false);
+    } catch (err) {
+      console.error(err);
+      alert(err.message || "Failed to save patient");
+    }
+  };
+
+  // ------------ DELETE USING MRN ------------
+  const handleDelete = async (mrn) => {
+    if (!window.confirm("Are you sure you want to delete this patient?")) return;
+
+    console.log("Deleting patient by MRN:", mrn);
+
+    try {
+      const res = await fetch(`http://localhost:4000/api/patients/${mrn}`, {
+        method: "DELETE",
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      });
+
+      const json = await res.json().catch(() => ({}));
+
+      if (!res.ok || json.success === false) {
+        throw new Error(json.message || "Failed to delete patient");
+      }
+
+      await fetchPatients();
+    } catch (err) {
+      console.error(err);
+      alert(err.message || "Failed to delete patient");
+    }
   };
 
   return (
     <>
       <Navbar />
+
       <div className="container py-5">
         <div className="d-flex justify-content-between align-items-center mb-4">
           <h3 className="fw-bold">Patient Management</h3>
@@ -167,11 +196,11 @@ const Patients = () => {
           </Button>
         </div>
 
-        {/* Search Bar */}
+        {/* Search */}
         <InputGroup className="mb-4">
           <Form.Control
             type="text"
-            placeholder="Search by name, MRN, or phone..."
+            placeholder="Search by name, phone, or MRN..."
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
           />
@@ -183,15 +212,14 @@ const Patients = () => {
           </Button>
         </InputGroup>
 
+        {/* Table / Loading / Empty states */}
         {loading ? (
           <div className="text-center py-5">
             <Spinner animation="border" variant="primary" />
             <p className="text-muted mt-2">Loading patients...</p>
           </div>
         ) : filteredPatients.length === 0 ? (
-          <div className="text-center text-muted py-4">
-            No patients found.
-          </div>
+          <div className="text-center text-muted py-4">No patients found.</div>
         ) : (
           <>
             <Table bordered hover responsive className="shadow-sm rounded-3">
@@ -211,10 +239,14 @@ const Patients = () => {
               <tbody className="text-center align-middle">
                 {currentPatients.map((p, index) => (
                   <tr key={p._id}>
-                    <td>{indexOfFirst + index + 1}</td>
-                    <td>{p.mrn}</td>
+                    <td>{indexOfFirstPatient + index + 1}</td>
+                    <td>{p.mrn || "-"}</td>
                     <td>{`${p.firstName} ${p.lastName}`}</td>
-                    <td>{new Date(p.dob).toLocaleDateString("en-GB")}</td>
+                    <td>
+                      {p.dob
+                        ? new Date(p.dob).toLocaleDateString("en-GB")
+                        : "-"}
+                    </td>
                     <td>{p.gender}</td>
                     <td>{p.phone}</td>
                     <td>{p.email}</td>
@@ -226,7 +258,7 @@ const Patients = () => {
                             : "bg-secondary text-white"
                         }`}
                       >
-                        {p.status}
+                        {p.status || "Active"}
                       </span>
                     </td>
                     <td>
@@ -241,7 +273,7 @@ const Patients = () => {
                       <Button
                         size="sm"
                         variant="outline-danger"
-                        onClick={() => handleDelete(p._id)}
+                        onClick={() => handleDelete(p.mrn)}
                       >
                         Delete
                       </Button>
@@ -255,21 +287,23 @@ const Patients = () => {
             <div className="d-flex justify-content-center mt-3">
               <nav>
                 <ul className="pagination">
-                  {Array.from({ length: totalPages }, (_, i) => (
-                    <li
-                      key={i}
-                      className={`page-item ${
-                        currentPage === i + 1 ? "active" : ""
-                      }`}
-                    >
-                      <Button
-                        className="page-link"
-                        onClick={() => paginate(i + 1)}
-                      >
-                        {i + 1}
-                      </Button>
-                    </li>
-                  ))}
+                  {Array.from(
+                    {
+                      length: Math.ceil(
+                        filteredPatients.length / patientsPerPage
+                      ),
+                    },
+                    (_, i) => (
+                      <li key={i} className="page-item">
+                        <Button
+                          className="page-link"
+                          onClick={() => paginate(i + 1)}
+                        >
+                          {i + 1}
+                        </Button>
+                      </li>
+                    )
+                  )}
                 </ul>
               </nav>
             </div>
@@ -277,109 +311,14 @@ const Patients = () => {
         )}
       </div>
 
-      {/* Modal for Add / Edit */}
-      <Modal show={showModal} onHide={() => setShowModal(false)} centered size="lg">
-        <Modal.Header closeButton>
-          <Modal.Title>{editMode ? "Edit Patient" : "Add New Patient"}</Modal.Title>
-        </Modal.Header>
-        <Modal.Body>
-          <Form onSubmit={editMode ? handleUpdate : handleAdd}>
-            <div className="row">
-              <div className="col-md-4 mb-3">
-                <Form.Label>MRN</Form.Label>
-                <Form.Control
-                  type="text"
-                  value={form.mrn}
-                  onChange={(e) => setForm({ ...form, mrn: e.target.value })}
-                  required
-                />
-              </div>
-              <div className="col-md-4 mb-3">
-                <Form.Label>First Name</Form.Label>
-                <Form.Control
-                  type="text"
-                  value={form.firstName}
-                  onChange={(e) => setForm({ ...form, firstName: e.target.value })}
-                  required
-                />
-              </div>
-              <div className="col-md-4 mb-3">
-                <Form.Label>Last Name</Form.Label>
-                <Form.Control
-                  type="text"
-                  value={form.lastName}
-                  onChange={(e) => setForm({ ...form, lastName: e.target.value })}
-                  required
-                />
-              </div>
-            </div>
-
-            <div className="row">
-              <div className="col-md-4 mb-3">
-                <Form.Label>Date of Birth</Form.Label>
-                <Form.Control
-                  type="date"
-                  value={form.dob?.split("T")[0] || ""}
-                  onChange={(e) => setForm({ ...form, dob: e.target.value })}
-                />
-              </div>
-              <div className="col-md-4 mb-3">
-                <Form.Label>Gender</Form.Label>
-                <Form.Select
-                  value={form.gender}
-                  onChange={(e) => setForm({ ...form, gender: e.target.value })}
-                >
-                  <option value="">Select</option>
-                  <option value="M">Male</option>
-                  <option value="F">Female</option>
-                </Form.Select>
-              </div>
-              <div className="col-md-4 mb-3">
-                <Form.Label>Status</Form.Label>
-                <Form.Select
-                  value={form.status}
-                  onChange={(e) => setForm({ ...form, status: e.target.value })}
-                >
-                  <option value="Active">Active</option>
-                  <option value="Inactive">Inactive</option>
-                </Form.Select>
-              </div>
-            </div>
-
-            <Form.Group className="mb-3">
-              <Form.Label>Phone</Form.Label>
-              <Form.Control
-                type="text"
-                value={form.phone}
-                onChange={(e) => setForm({ ...form, phone: e.target.value })}
-              />
-            </Form.Group>
-
-            <Form.Group className="mb-3">
-              <Form.Label>Email</Form.Label>
-              <Form.Control
-                type="email"
-                value={form.email}
-                onChange={(e) => setForm({ ...form, email: e.target.value })}
-              />
-            </Form.Group>
-
-            <Form.Group className="mb-3">
-              <Form.Label>Address</Form.Label>
-              <Form.Control
-                as="textarea"
-                rows={2}
-                value={form.address}
-                onChange={(e) => setForm({ ...form, address: e.target.value })}
-              />
-            </Form.Group>
-
-            <Button variant="success" type="submit" className="mt-3 w-100">
-              {editMode ? "Update Patient" : "Add Patient"}
-            </Button>
-          </Form>
-        </Modal.Body>
-      </Modal>
+      {/* Multi-step Add / Edit modal */}
+      <AddPatientModal
+        show={showModal}
+        handleClose={handleCloseModal}
+        onSave={handleSavePatient}
+        editMode={editMode}
+        patient={selectedPatient}
+      />
 
       <Footer />
     </>

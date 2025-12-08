@@ -66,9 +66,8 @@ const ScheduleCalendar = () => {
       const data = await res.json();
       const mapped = data.map((s) => ({
         id: s._id,
-        title: `${s.patient?.firstName || "Unknown"} ${
-          s.patient?.lastName || ""
-        } (${s.bed?.name || "Unassigned"})`,
+        title: `${s.patient?.firstName || "Unknown"} ${s.patient?.lastName || ""
+          } (${s.bed?.name || "Unassigned"})`,
         start: new Date(`${s.date.split("T")[0]}T${s.startTime}`),
         end: new Date(`${s.date.split("T")[0]}T${s.endTime}`),
         status: s.status,
@@ -179,28 +178,29 @@ const ScheduleCalendar = () => {
         ) : (
           <div className="rotated-calendar">
             <Calendar
-            min={new Date()} // hide past days
-            onNavigate={(date) => {
-  const now = new Date();
-  if (date < now.setHours(0, 0, 0, 0)) return; // block navigation into past
-}}
+  localizer={localizer}
+  events={events}
+  formats={formats}
+  defaultView="week"
+  views={["day", "week", "month"]}
+  step={60}
+  timeslots={1}
+  defaultDate={new Date()}
+  style={{ height: "80vh" }}
+  eventPropGetter={eventStyleGetter}
+  onSelectEvent={(event) => handleDelete(event.id)}
 
-              localizer={localizer}
-              events={events}
-              formats={formats}
-              defaultView="week"
-              views={["day", "week"]}
-              dayLayoutAlgorithm="no-overlap"
-              step={60}
-              timeslots={1}
-              defaultDate={new Date()}
-              style={{ height: "80vh" }}
-              eventPropGetter={eventStyleGetter}
-              onSelectEvent={(event) => handleDelete(event.id)}
-              components={{
-                timeGutterHeader: () => <strong>Hours</strong>,
-              }}
-            />
+  // ✅ Fully allow navigation (Fixes Next / Back / Today)
+  onNavigate={(newDate, view) => {
+    // Do nothing — allow free navigation
+  }}
+
+  components={{
+    timeGutterHeader: () => <strong>Hours</strong>,
+  }}
+/>
+
+
           </div>
         )}
       </div>
@@ -225,93 +225,91 @@ const ScheduleCalendar = () => {
               />
             </Form.Group>
 
-           <Form.Group className="mb-3">
-  <Form.Label>Date</Form.Label>
-  <Form.Control
-    type="date"
-    min={new Date().toISOString().split("T")[0]} // hide past dates
-    value={form.date}
-    onChange={(e) => setForm({ ...form, date: e.target.value })}
-    required
-  />
-</Form.Group>
+            <Form.Group className="mb-3">
+              <Form.Label>Date</Form.Label>
+              <Form.Control
+                type="date"
+                min={new Date().toISOString().split("T")[0]} // hide past dates
+                value={form.date}
+                onChange={(e) => setForm({ ...form, date: e.target.value })}
+                required
+              />
+            </Form.Group>
 
-<div className="row">
-  <div className="col">
-    <Form.Group>
-      <Form.Label>Start Time</Form.Label>
-      <Form.Control
-        type="time"
-        step="3600"
-        value={form.startTime}
-        onChange={(e) => setForm({ ...form, startTime: e.target.value })}
-        required
-      />
-    </Form.Group>
-  </div>
-  <div className="col">
-    <Form.Group>
-      <Form.Label>End Time</Form.Label>
-      <Form.Control
-        type="time"
-        step="3600"
-        value={form.endTime}
-        onChange={(e) => setForm({ ...form, endTime: e.target.value })}
-        required
-      />
-    </Form.Group>
-  </div>
-</div>
+            <div className="row">
+              <div className="col">
+                <Form.Group>
+                  <Form.Label>Start Time</Form.Label>
+                  <Form.Control
+                    type="time"
+                    step="3600"
+                    value={form.startTime}
+                    onChange={(e) => setForm({ ...form, startTime: e.target.value })}
+                    required
+                  />
+                </Form.Group>
+              </div>
+              <div className="col">
+                <Form.Group>
+                  <Form.Label>End Time</Form.Label>
+                  <Form.Control
+                    type="time"
+                    step="3600"
+                    value={form.endTime}
+                    onChange={(e) => setForm({ ...form, endTime: e.target.value })}
+                    required
+                  />
+                </Form.Group>
+              </div>
+            </div>
 
-{/* Fetch available beds once all three fields filled */}
-{form.date && form.startTime && form.endTime && (
-  <Button
-    className="mt-3"
-    variant="secondary"
-    onClick={async () => {
-      const res = await fetch(
-        `http://localhost:4000/api/beds/availability?date=${form.date}&start=${form.startTime}&end=${form.endTime}`,
-        { headers: { Authorization: `Bearer ${token}` } }
-      );
-      const data = await res.json();
-      setBeds(data);
-    }}
-  >
-    Check Bed Availability
-  </Button>
-)}
+            {/* Fetch available beds once all three fields filled */}
+            {form.date && form.startTime && form.endTime && (
+              <Button
+                className="mt-3"
+                variant="secondary"
+                onClick={async () => {
+                  const res = await fetch(
+                    `http://localhost:4000/api/beds/availability?date=${form.date}&start=${form.startTime}&end=${form.endTime}`,
+                    { headers: { Authorization: `Bearer ${token}` } }
+                  );
+                  const data = await res.json();
+                  setBeds(data);
+                }}
+              >
+                Check Bed Availability
+              </Button>
+            )}
 
-{/* Show available beds */}
-{beds.length > 0 && (
-  <Form.Group className="mt-4 mb-3">
-    <Form.Label>Select Bed</Form.Label>
-    <div className="d-flex flex-wrap gap-2">
-      {beds.map((b) => (
-        <div
-          key={b._id}
-          onClick={() => b.isFree && setForm({ ...form, bed: b._id })}
-          className={`p-2 border rounded text-center ${
-            form.bed === b._id ? "bg-primary text-white" : ""
-          }`}
-          style={{
-            width: "100px",
-            cursor: b.isFree ? "pointer" : "not-allowed",
-            opacity: b.isFree ? 1 : 0.5,
-          }}
-        >
-          {b.name}
-          <div
-            className={`small ${
-              b.isFree ? "text-success" : "text-danger"
-            } fw-semibold`}
-          >
-            {b.isFree ? "Available" : "Booked"}
-          </div>
-        </div>
-      ))}
-    </div>
-  </Form.Group>
-)}
+            {/* Show available beds */}
+            {beds.length > 0 && (
+              <Form.Group className="mt-4 mb-3">
+                <Form.Label>Select Bed</Form.Label>
+                <div className="d-flex flex-wrap gap-2">
+                  {beds.map((b) => (
+                    <div
+                      key={b._id}
+                      onClick={() => b.isFree && setForm({ ...form, bed: b._id })}
+                      className={`p-2 border rounded text-center ${form.bed === b._id ? "bg-primary text-white" : ""
+                        }`}
+                      style={{
+                        width: "100px",
+                        cursor: b.isFree ? "pointer" : "not-allowed",
+                        opacity: b.isFree ? 1 : 0.5,
+                      }}
+                    >
+                      {b.name}
+                      <div
+                        className={`small ${b.isFree ? "text-success" : "text-danger"
+                          } fw-semibold`}
+                      >
+                        {b.isFree ? "Available" : "Booked"}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </Form.Group>
+            )}
 
 
             <Form.Group className="mb-3">
