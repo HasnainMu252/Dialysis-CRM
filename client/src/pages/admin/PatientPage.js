@@ -1,4 +1,4 @@
-// src/pages/Patients/Patients.jsx  (ya PatientPage.js – naam apne project ke mutabiq rakho)
+// src/pages/Patients/Patients.jsx
 import React, { useEffect, useState } from "react";
 import {
   Table,
@@ -6,11 +6,12 @@ import {
   Spinner,
   InputGroup,
   Form,
+  Modal, // 👈 added for View Details modal
 } from "react-bootstrap";
 import Navbar from "../../components/Navbar";
 import Footer from "../../components/Footer";
 import "../../styles/global.css";
-import AddPatientModal from "../../components/AddPatientModal"; // ⚠️ path apne folder structure ke hisaab se adjust karo
+import AddPatientModal from "../../components/AddPatientModal"; // path adjust if needed
 
 const Patients = () => {
   const [patients, setPatients] = useState([]);
@@ -20,6 +21,10 @@ const Patients = () => {
   const [showModal, setShowModal] = useState(false);
   const [editMode, setEditMode] = useState(false);
   const [selectedPatient, setSelectedPatient] = useState(null);
+
+  // 👇 NEW: View Details modal state
+  const [showViewModal, setShowViewModal] = useState(false);
+  const [viewPatient, setViewPatient] = useState(null);
 
   const [searchTerm, setSearchTerm] = useState("");
   const [currentPage, setCurrentPage] = useState(1);
@@ -43,7 +48,6 @@ const Patients = () => {
         setPatients(data.patients);
         setFilteredPatients(data.patients);
       } else if (Array.isArray(data)) {
-        // in case API directly returns array
         setPatients(data);
         setFilteredPatients(data);
       } else {
@@ -96,7 +100,7 @@ const Patients = () => {
     indexOfLastPatient
   );
 
-  // ------------ MODAL HANDLERS ------------
+  // ------------ MODAL HANDLERS (ADD / EDIT) ------------
   const openAddModal = () => {
     setEditMode(false);
     setSelectedPatient(null);
@@ -105,7 +109,7 @@ const Patients = () => {
 
   const openEditModal = (patient) => {
     setEditMode(true);
-    setSelectedPatient(patient); // MRN iss object me hai
+    setSelectedPatient(patient);
     setShowModal(true);
   };
 
@@ -119,7 +123,7 @@ const Patients = () => {
       const isEdit = editMode && selectedPatient?.mrn;
 
       const url = isEdit
-        ? `http://localhost:4000/api/patients/${selectedPatient.mrn}` // ✅ MRN based
+        ? `http://localhost:4000/api/patients/${selectedPatient.mrn}` // MRN based
         : "http://localhost:4000/api/patients";
 
       const method = isEdit ? "PUT" : "POST";
@@ -161,8 +165,6 @@ const Patients = () => {
   const handleDelete = async (mrn) => {
     if (!window.confirm("Are you sure you want to delete this patient?")) return;
 
-    console.log("Deleting patient by MRN:", mrn);
-
     try {
       const res = await fetch(`http://localhost:4000/api/patients/${mrn}`, {
         method: "DELETE",
@@ -182,6 +184,22 @@ const Patients = () => {
       console.error(err);
       alert(err.message || "Failed to delete patient");
     }
+  };
+
+  // ------------ VIEW DETAILS MODAL HANDLERS ------------
+  const openViewModal = (patient) => {
+    setViewPatient(patient);
+    setShowViewModal(true);
+  };
+
+  const closeViewModal = () => {
+    setShowViewModal(false);
+    setViewPatient(null);
+  };
+
+  const formatDate = (d) => {
+    if (!d) return "-";
+    return new Date(d).toLocaleDateString("en-GB");
   };
 
   return (
@@ -242,11 +260,7 @@ const Patients = () => {
                     <td>{indexOfFirstPatient + index + 1}</td>
                     <td>{p.mrn || "-"}</td>
                     <td>{`${p.firstName} ${p.lastName}`}</td>
-                    <td>
-                      {p.dob
-                        ? new Date(p.dob).toLocaleDateString("en-GB")
-                        : "-"}
-                    </td>
+                    <td>{formatDate(p.dob)}</td>
                     <td>{p.gender}</td>
                     <td>{p.phone}</td>
                     <td>{p.email}</td>
@@ -262,6 +276,14 @@ const Patients = () => {
                       </span>
                     </td>
                     <td>
+                      <Button
+                        size="sm"
+                        variant="outline-info"
+                        className="me-2"
+                        onClick={() => openViewModal(p)}
+                      >
+                        View
+                      </Button>
                       <Button
                         size="sm"
                         variant="outline-primary"
@@ -311,7 +333,7 @@ const Patients = () => {
         )}
       </div>
 
-      {/* Multi-step Add / Edit modal */}
+      {/* Add / Edit modal */}
       <AddPatientModal
         show={showModal}
         handleClose={handleCloseModal}
@@ -319,6 +341,140 @@ const Patients = () => {
         editMode={editMode}
         patient={selectedPatient}
       />
+
+      {/* View Details Modal */}
+      <Modal
+        show={showViewModal}
+        onHide={closeViewModal}
+        centered
+        size="lg"
+      >
+        <Modal.Header closeButton>
+          <Modal.Title>
+            Patient Details {viewPatient?.mrn ? `- ${viewPatient.mrn}` : ""}
+          </Modal.Title>
+        </Modal.Header>
+        <Modal.Body>
+          {viewPatient && (
+            <div className="container-fluid">
+              <div className="row mb-3">
+                <div className="col-md-6">
+                  <h6 className="text-muted">Name</h6>
+                  <p className="fw-semibold">
+                    {viewPatient.firstName} {viewPatient.lastName}
+                  </p>
+                </div>
+                <div className="col-md-3">
+                  <h6 className="text-muted">DOB</h6>
+                  <p className="fw-semibold">{formatDate(viewPatient.dob)}</p>
+                </div>
+                <div className="col-md-3">
+                  <h6 className="text-muted">Gender</h6>
+                  <p className="fw-semibold">{viewPatient.gender}</p>
+                </div>
+              </div>
+
+              <div className="row mb-3">
+                <div className="col-md-4">
+                  <h6 className="text-muted">MRN</h6>
+                  <p className="fw-semibold">{viewPatient.mrn || "-"}</p>
+                </div>
+                <div className="col-md-4">
+                  <h6 className="text-muted">Phone</h6>
+                  <p className="fw-semibold">{viewPatient.phone}</p>
+                </div>
+                <div className="col-md-4">
+                  <h6 className="text-muted">Email</h6>
+                  <p className="fw-semibold">{viewPatient.email}</p>
+                </div>
+              </div>
+
+              <div className="row mb-3">
+                <div className="col-12">
+                  <h6 className="text-muted">Address</h6>
+                  <p className="fw-semibold">{viewPatient.address}</p>
+                </div>
+              </div>
+
+              <hr />
+
+              <div className="row mb-3">
+                <div className="col-md-4">
+                  <h6 className="text-muted">Dialysis Modality</h6>
+                  <p className="fw-semibold">
+                    {viewPatient.dialysis?.modality || "-"}
+                  </p>
+                </div>
+                <div className="col-md-4">
+                  <h6 className="text-muted">Shift</h6>
+                  <p className="fw-semibold">
+                    {viewPatient.dialysis?.shift || "-"}
+                  </p>
+                </div>
+                <div className="col-md-4">
+                  <h6 className="text-muted">Schedule Days</h6>
+                  <p className="fw-semibold">
+                    {Array.isArray(viewPatient.dialysis?.scheduleDays)
+                      ? viewPatient.dialysis.scheduleDays.join(", ")
+                      : "-"}
+                  </p>
+                </div>
+              </div>
+
+              {viewPatient.insurance && (
+                <>
+                  <hr />
+                  <div className="row mb-3">
+                    <div className="col-md-4">
+                      <h6 className="text-muted">Insurance Provider</h6>
+                      <p className="fw-semibold">
+                        {viewPatient.insurance.provider}
+                      </p>
+                    </div>
+                    <div className="col-md-4">
+                      <h6 className="text-muted">Member ID</h6>
+                      <p className="fw-semibold">
+                        {viewPatient.insurance.memberId}
+                      </p>
+                    </div>
+                    <div className="col-md-4">
+                      <h6 className="text-muted">Group Number</h6>
+                      <p className="fw-semibold">
+                        {viewPatient.insurance.groupNumber}
+                      </p>
+                    </div>
+                  </div>
+                </>
+              )}
+
+              <hr />
+              <div className="row">
+                <div className="col-md-4">
+                  <h6 className="text-muted">Status</h6>
+                  <p className="fw-semibold">{viewPatient.status}</p>
+                </div>
+                <div className="col-md-4">
+                  <h6 className="text-muted">Created At</h6>
+                  <p className="fw-semibold">
+                    {formatDate(viewPatient.createdAt)}
+                  </p>
+                </div>
+                <div className="col-md-4">
+                  <h6 className="text-muted">Last Updated</h6>
+                  <p className="fw-semibold">
+                    {formatDate(viewPatient.updatedAt)}
+                  </p>
+                </div>
+              </div>
+            </div>
+          )}
+        </Modal.Body>
+        <Modal.Footer>
+          <Button variant="secondary" onClick={closeViewModal}>
+            Close
+          </Button>
+        </Modal.Footer>
+      </Modal>
 
       <Footer />
     </>
