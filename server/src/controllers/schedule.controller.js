@@ -56,10 +56,6 @@ const formatSchedule = (doc) => {
   };
 };
 
-/**
- * CREATE SCHEDULE
- * Body: { patientMrn, bedCode, date(YYYY-MM-DD), startTime(HH:MM), endTime(HH:MM), status? }
- */
 export const createSchedule = async (req, res) => {
   try {
     const { patientMrn, bedCode, date, startTime, endTime, status } = req.body;
@@ -68,12 +64,11 @@ export const createSchedule = async (req, res) => {
     if (!patientMrn || !bedCode || !date || !startTime || !endTime) {
       return res.status(400).json({
         success: false,
-        message:
-          "Missing required fields: patientMrn, bedCode, date, startTime, endTime",
+        message: "Missing required fields: patientMrn, bedCode, date, startTime, endTime",
       });
     }
 
-    // 2) Validate format
+    // 2) Validate date/time format
     if (!DATE_RE.test(date) || !TIME_RE.test(startTime) || !TIME_RE.test(endTime)) {
       return res.status(400).json({
         success: false,
@@ -81,29 +76,35 @@ export const createSchedule = async (req, res) => {
       });
     }
 
-    // 3) Build scheduleDate (UTC midnight) and check past date
-    const [y, m, d] = date.split("-").map(Number);
-    const scheduleDate = new Date(Date.UTC(y, m - 1, d, 0, 0, 0));
-
-    const now = new Date();
-    const todayUTC = new Date(
-      Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate(), 0, 0, 0)
-    );
-
-    if (scheduleDate < todayUTC) {
-      return res.status(400).json({
-        success: false,
-        message: "Cannot create schedule in the past.",
-      });
-    }
-
-    // 4) Time comparison
-    const start = toMin(startTime);
-    const end = toMin(endTime);
-    if (start >= end) {
+    // 3) Time order check
+    const startMin = toMin(startTime);
+    const endMin = toMin(endTime);
+    if (startMin >= endMin) {
       return res.status(400).json({
         success: false,
         message: "startTime must be before endTime",
+      });
+    }
+
+    // ✅ Helper: build UTC datetime from date + time
+    const buildUtcDateTime = (dateStr, timeStr) => {
+      const [y, m, d] = dateStr.split("-").map(Number);
+      const [hh, mm] = timeStr.split(":").map(Number);
+      return new Date(Date.UTC(y, m - 1, d, hh, mm, 0));
+    };
+
+    // ✅ Date-only (00:00 UTC) for filtering + reports
+    const [y, m, d] = date.split("-").map(Number);
+    const dateOnlyUTC = new Date(Date.UTC(y, m - 1, d, 0, 0, 0));
+
+    const startAt = buildUtcDateTime(date, startTime);
+    const endAt = buildUtcDateTime(date, endTime);
+
+    // 4) Past check (important)
+    if (startAt < new Date()) {
+      return res.status(400).json({
+        success: false,
+        message: "Cannot create schedule in the past.",
       });
     }
 
@@ -125,6 +126,7 @@ export const createSchedule = async (req, res) => {
       });
     }
 
+    // ✅ If bed under maintenance, block scheduling
     if (bedDoc.status === "UnderMaintenance") {
       return res.status(400).json({
         success: false,
@@ -132,50 +134,54 @@ export const createSchedule = async (req, res) => {
       });
     }
 
-    // 7) Prevent overlap (same bed, same date, overlapping time)
+    // ✅ If you add maintenanceUntil in Bed, block scheduling until released
+    if (bedDoc.maintenanceUntil && bedDoc.maintenanceUntil > startAt) {
+      return res.status(400).json({
+        success: false,
+        message: `Bed ${bedDoc.name} is under maintenance until ${bedDoc.maintenanceUntil.toISOString()}`,
+      });
+    }
+
+    // 7) ✅ Prevent overlap using startAt/endAt (correct way)
     const overlap = await Schedule.findOne({
       bed: bedDoc._id,
-      date: scheduleDate,
-      status: { $in: ["Scheduled", "InProgress"] },
-      $and: [{ startTime: { $lt: endTime } }, { endTime: { $gt: startTime } }],
+      state: { $in: ["Scheduled", "CheckedIn", "InProgress"] }, // active sessions
+      startAt: { $lt: endAt },
+      endAt: { $gt: startAt },
     });
 
     if (overlap) {
       return res.status(400).json({
         success: false,
-        message: `Bed ${bedDoc.name} already booked for that time.`,
+        message: `Bed ${bedDoc.name} is already booked for that time.`,
       });
     }
 
-    // 8) If schedule is for today, mark bed Busy
-    if (scheduleDate.getTime() === todayUTC.getTime()) {
-      await Bed.findByIdAndUpdate(bedDoc._id, { status: "Busy" });
-    }
+    // 8) Create schedule
+    const durationHours = (endAt.getTime() - startAt.getTime()) / (1000 * 60 * 60);
 
-    // 9) Create schedule – schedule.code auto generated in pre("save")
     const schedule = await Schedule.create({
       patientMrn,
       patient: patient._id,
       bedCode,
       bed: bedDoc._id,
-      date: scheduleDate,
+
+      date: dateOnlyUTC,      // ✅ date-only for filters
       startTime,
       endTime,
+
+      startAt,                // ✅ datetime accurate
+      endAt,                  // ✅ datetime accurate
+      durationHours,
+
+      state: "Scheduled",
       status: status || "Scheduled",
     });
 
-    // 10) Populate before sending back
+    // 9) Populate and return formatted
     const populatedSchedule = await Schedule.findById(schedule._id)
-      .populate({
-        path: "patient",
-        select: "firstName lastName mrn phone",
-        strictPopulate: false,
-      })
-      .populate({
-        path: "bed",
-        select: "code name status type",
-        strictPopulate: false,
-      });
+      .populate({ path: "patient", select: "firstName lastName mrn phone", strictPopulate: false })
+      .populate({ path: "bed", select: "code name status type", strictPopulate: false });
 
     return res.status(201).json({
       success: true,
@@ -185,12 +191,10 @@ export const createSchedule = async (req, res) => {
   } catch (err) {
     console.error("createSchedule error:", err);
 
-    // Unique index duplicate (bed already booked exact same slot)
     if (err.code === 11000) {
       return res.status(400).json({
         success: false,
-        message:
-          "Bed is already booked for this date and time (duplicate schedule).",
+        message: "Duplicate schedule detected (bed already booked).",
       });
     }
 
@@ -201,6 +205,13 @@ export const createSchedule = async (req, res) => {
     });
   }
 };
+
+
+
+
+
+
+
 
 /**
  * GET ALL SCHEDULES WITH FILTERS
@@ -273,12 +284,17 @@ export const getSchedules = async (req, res) => {
  */
 export const getTodaySchedules = async (req, res) => {
   try {
-    const now = new Date();
-    const todayUTC = new Date(
-      Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate(), 0, 0, 0)
-    );
 
-    const schedules = await Schedule.find({ date: todayUTC })
+
+    const now = new Date();
+    // Start of today (00:00:00 UTC)
+    const startOfDayUTC = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate(), 0, 0, 0));
+    const endOfDayUTC = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate(), 23, 59, 59));
+
+    const schedules = await Schedule.find({
+      startAt: { $gte: startOfDayUTC, $lte: endOfDayUTC }
+    })
+
       .populate({
         path: "patient",
         select: "firstName lastName mrn phone",
@@ -293,11 +309,12 @@ export const getTodaySchedules = async (req, res) => {
 
     res.json({
       success: true,
-      date: todayUTC.toISOString().split("T")[0],
+      date: startOfDayUTC.toISOString().split("T")[0], // Date part only
       count: schedules.length,
       schedules: schedules.map(formatSchedule),
     });
   } catch (err) {
+    console.error("getTodaySchedules error:", err);
     res.status(500).json({
       success: false,
       message: "Server error",
@@ -305,6 +322,8 @@ export const getTodaySchedules = async (req, res) => {
     });
   }
 };
+
+
 
 /**
  * GET UPCOMING SCHEDULES

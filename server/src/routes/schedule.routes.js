@@ -66,6 +66,7 @@ router.get("/:code", getSchedule);
 
 /* ================================
    📌 UPDATE SCHEDULE BY CODE
+   Allowed: Admin, CaseManager, Nurse
 ================================ */
 router.patch(
   "/:code",
@@ -96,6 +97,7 @@ router.delete(
 
 /* ================================
    📌 REQUEST CANCEL BY CODE
+   Allowed: Admin, CaseManager, Nurse
 ================================ */
 router.patch(
   "/:code/cancel",
@@ -105,6 +107,7 @@ router.patch(
 
 /* ================================
    📌 APPROVE CANCEL REQUEST BY CODE
+   Allowed: Admin, CaseManager
 ================================ */
 router.patch(
   "/:code/cancel/approve",

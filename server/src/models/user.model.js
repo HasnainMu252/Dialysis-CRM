@@ -1,22 +1,23 @@
 import mongoose from "mongoose";
 import bcrypt from "bcrypt";
 
-
-const roles = ["Admin", "Nurse", "CaseManager", "Biller"];
+export const RoleEnum = ["Admin", "Nurse", "CaseManager", "Biller", "Patient"];
 
 const userSchema = new mongoose.Schema(
   {
     name: { type: String, required: true, trim: true },
-    email: { type: String, required: [true,'Email is required'], unique: true, lowercase: true,match: [/^\S+@\S+\.\S+$/, "Invalid email format"] },
+    email: {
+      type: String,
+      required: [true, "Email is required"],
+      unique: true,
+      lowercase: true,
+      match: [/^\S+@\S+\.\S+$/, "Invalid email format"],
+    },
     password: { type: String, required: true, minlength: 6 },
-    
-    
-    role: { type: String, enum: roles, default: "Nurse" },
-    active: { type: Boolean, default: true }
+    role: { type: String, enum: RoleEnum, default: "Nurse" },
+    active: { type: Boolean, default: true },
   },
   { timestamps: true }
-
-  
 );
 
 userSchema.pre("save", async function (next) {
@@ -30,4 +31,3 @@ userSchema.methods.comparePassword = function (candidate) {
 };
 
 export default mongoose.model("User", userSchema);
-export const RoleEnum = roles;

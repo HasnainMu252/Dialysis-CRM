@@ -67,6 +67,18 @@ const scheduleSchema = new mongoose.Schema(
       approved: { type: Boolean, default: false },
       reason: { type: String },
     },
+    startAt: { type: Date, required: true },  // exact DateTime in UTC
+endAt: { type: Date, required: true },    // exact DateTime in UTC
+
+state: {
+  type: String,
+  enum: ["Scheduled", "CheckedIn", "InProgress", "Completed", "Cancelled", "NoShow", "Maintenance"],
+  default: "Scheduled",
+},
+
+durationHours: { type: Number, default: 4 }, // 3 / 3.5 / 4
+actualStartAt: { type: Date, default: null },
+actualEndAt: { type: Date, default: null },
   },
   {
     timestamps: true,

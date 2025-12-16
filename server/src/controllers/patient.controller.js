@@ -3,6 +3,30 @@ import mongoose from "mongoose";
 import Schedule from "../models/schedule.model.js";
 import Billing from "../models/billing.model.js";
 
+export const getPatientProfile = async (req, res) => {
+  try {
+    const patient = await Patient.findById(req.user.id).select("-password");
+
+    if (!patient) {
+      return res.status(404).json({
+        success: false,
+        message: "Patient not found",
+      });
+    }
+
+    res.json({
+      success: true,
+      patient,
+    });
+  } catch (err) {
+    res.status(500).json({
+      success: false,
+      message: "Server error",
+      error: err.message,
+    });
+  }
+};
+
 export const createPatient = async (req, res) => {
   try {
     const { phone, email } = req.body;

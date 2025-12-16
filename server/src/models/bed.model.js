@@ -49,6 +49,9 @@ const bedSchema = new mongoose.Schema(
       default: 1,
       min: 1,
     },
+    // add inside schema fields
+    maintenanceUntil: { type: Date, default: null },
+    lastMaintenanceAt: { type: Date, default: null },
 
     notes: { type: String },
   },

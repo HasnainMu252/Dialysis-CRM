@@ -1,11 +1,15 @@
 import { Router } from "express";
 import { requireAuth, authorizeRoles } from "../middleware/auth.js";
-import { createPatient, listPatients, getPatient, updatePatient, removePatient,deleteAllPatients } from "../controllers/patient.controller.js";
+import { createPatient,getPatientProfile, listPatients, getPatient, updatePatient, removePatient,deleteAllPatients } from "../controllers/patient.controller.js";
 
 const router = Router();
 
 // Nurses, Case Managers, Admins can read; only Admin/CaseManager can create/update/delete (example policy)
 router.use(requireAuth);
+
+// for login
+router.get("/me", requireAuth, getPatientProfile);
+
 
 router.get("/", listPatients);
 router.post("/", authorizeRoles("Admin", "CaseManager"), createPatient);

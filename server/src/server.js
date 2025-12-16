@@ -5,14 +5,19 @@ import morgan from "morgan";
 import cookieParser from "cookie-parser";
 import { connectDB } from "./config/db.js";
 import { notFound, errorHandler } from "./middleware/error.js";
-import authRoutes from "./routes/auth.routes.js";
 import patientRoutes from "./routes/patient.routes.js";
 import scheduleRoutes from "./routes/schedule.routes.js";
-import billingRoutes from "./routes/billing.routes.js";
-import referralRoutes from "./routes/referral.routes.js";
+
 import bedRoutes from "./routes/bed.routes.js";
+import shiftRoutes from "./routes/shift.routes.js";
+import settingsRoutes from "./routes/settings.routes.js";
+import lifecycleRoutes from "./routes/sessionLifecycle.routes.js";
+import maintenanceRoutes from "./routes/bedMaintenance.routes.js";
+
+
 
 import swaggerUi from "swagger-ui-express"; // ✅ you need this
+import authRoutes from "./routes/auth.routes.js"; // Import the new auth routes
 import { createRequire } from "module";
 const require = createRequire(import.meta.url);
 const swaggerDocument = require("../swagger-output.json"); // ✅ load generated swagger file
@@ -36,15 +41,20 @@ app.use(express.urlencoded({ extended: true }));
 app.use(cookieParser());
 app.use(morgan("dev"));
 
+app.use("/api/auth", authRoutes); // Register the auth routes
+
 // Routes
 app.get("/api/health", (_req, res) => res.json({ status: "ok" }));
 app.use("/api/auth", authRoutes);
 app.use("/api/auth/me", authRoutes);
 app.use("/api/patients", patientRoutes);
 app.use("/api/schedules", scheduleRoutes);
-app.use("/api/billing", billingRoutes);
-app.use("/api/referrals", referralRoutes);
+app.use("/api/shifts", shiftRoutes);
 app.use("/api/beds", bedRoutes);
+app.use("/api/settings", settingsRoutes);
+app.use("/api/lifecycle", lifecycleRoutes);
+app.use("/api/maintenance", maintenanceRoutes);
+
 
 // Error Handlers
 app.use(notFound);

@@ -1,16 +1,23 @@
-import mongoose from "mongoose";
+import { Router } from "express";
+import { requireAuth, authorizeRoles } from "../middleware/auth.js";
+import {
+  createBilling,
+  listBilling,
+  getBilling,
+  updateBilling,
+  deleteBilling,
+} from "../controllers/billing.controller.js";
 
-const billingSchema = new mongoose.Schema(
-  {
-    patient: { type: mongoose.Schema.Types.ObjectId, ref: "Patient", required: true },
-    encounterDate: { type: Date, required: true },
-    cptCodes: [{ code: String, amount: Number }],
-    payer: String,
-    total: Number,
-    status: { type: String, enum: ["Pending", "Paid", "Unpaid"], default: "Unpaid" },
-    notes: String,
-  },
-  { timestamps: true }
-);
+const router = Router();
+router.use(requireAuth);
 
-export default mongoose.model("Billing", billingSchema);
+// Admin & Biller
+router.get("/", authorizeRoles("Admin", "Biller"), listBilling);
+router.post("/", authorizeRoles("Admin", "Biller"), createBilling);
+router.get("/:code", authorizeRoles("Admin", "Biller"), getBilling);
+router.patch("/:code", authorizeRoles("Admin", "Biller"), updateBilling);
+
+// Admin only
+router.delete("/:code", authorizeRoles("Admin"), deleteBilling);
+
+export default router;
