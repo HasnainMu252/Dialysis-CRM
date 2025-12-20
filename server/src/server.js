@@ -13,6 +13,7 @@ import shiftRoutes from "./routes/shift.routes.js";
 import settingsRoutes from "./routes/settings.routes.js";
 import lifecycleRoutes from "./routes/sessionLifecycle.routes.js";
 import maintenanceRoutes from "./routes/bedMaintenance.routes.js";
+import billingRoutes from "./routes/billing.routes.js";
 
 
 
@@ -54,6 +55,8 @@ app.use("/api/beds", bedRoutes);
 app.use("/api/settings", settingsRoutes);
 app.use("/api/lifecycle", lifecycleRoutes);
 app.use("/api/maintenance", maintenanceRoutes);
+app.use("/api/billing", billingRoutes);
+
 
 
 // Error Handlers
