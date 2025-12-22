@@ -30,10 +30,13 @@ export const createBilling = async (req, res) => {
   try {
     const { patientMrn, scheduleCode, amount, paymentMethod, notes } = req.body;
 
-    if (!patientMrn || !scheduleCode || amount == null || !paymentMethod) {
+    const amt = Number(amount);
+
+    if (!patientMrn || !scheduleCode || Number.isNaN(amt) || !paymentMethod) {
       return res.status(400).json({
         success: false,
         message: "Missing required fields: patientMrn, scheduleCode, amount, paymentMethod",
+        received: req.body, // remove later
       });
     }
 
@@ -48,18 +51,24 @@ export const createBilling = async (req, res) => {
       patient: patient._id,
       scheduleCode,
       schedule: schedule._id,
-      amount: Number(amount),
+      amount: amt,
       paymentMethod,
       notes: notes || "",
       status: "Pending",
     });
 
     const populated = await Billing.findById(bill._id).populate("patient", "firstName lastName mrn");
-    return res.status(201).json({ success: true, message: "Billing created", billing: formatBilling(populated) });
+
+    return res.status(201).json({
+      success: true,
+      message: "Billing created",
+      billing: formatBilling(populated),
+    });
   } catch (e) {
     return res.status(500).json({ success: false, message: "Server error", error: e.message });
   }
 };
+
 
 // GET /api/billing?patientMrn=&status=&from=&to=
 export const listBilling = async (req, res) => {
@@ -80,6 +89,10 @@ export const listBilling = async (req, res) => {
       .populate("patient", "firstName lastName mrn")
       .sort({ createdAt: -1 })
       .limit(200);
+
+      console.log("Billing import =>", Billing);
+console.log("Billing.find =>", Billing?.find);
+
 
     return res.json({ success: true, count: bills.length, billings: bills.map(formatBilling) });
   } catch (e) {
