@@ -14,6 +14,7 @@ import settingsRoutes from "./routes/settings.routes.js";
 import lifecycleRoutes from "./routes/sessionLifecycle.routes.js";
 import maintenanceRoutes from "./routes/bedMaintenance.routes.js";
 import billingRoutes from "./routes/billing.routes.js";
+import referrals from "./routes/referral.routes.js";
 
 
 
@@ -56,6 +57,7 @@ app.use("/api/settings", settingsRoutes);
 app.use("/api/lifecycle", lifecycleRoutes);
 app.use("/api/maintenance", maintenanceRoutes);
 app.use("/api/billing", billingRoutes);
+app.use("/api/referrals", referrals);
 
 
 
