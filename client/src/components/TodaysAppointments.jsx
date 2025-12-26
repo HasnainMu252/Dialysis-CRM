@@ -1,12 +1,12 @@
-import  { useEffect, useState } from "react";
-import {  Spinner } from "react-bootstrap";
+import { useEffect, useState } from "react";
+import { Spinner } from "react-bootstrap";
+import { useNavigate } from "react-router-dom"; // Updated to useNavigate
 
 const TodaysAppointments = () => {
   const [appointments, setAppointments] = useState([]);
   const [loading, setLoading] = useState(true);
   const token = localStorage.getItem("token");
-
-
+  const navigate = useNavigate(); // For redirection
 
   // Helper: format date as DD/MM/YYYY
   const formatDate = (dateString) => {
@@ -42,15 +42,14 @@ const TodaysAppointments = () => {
 
         const data = await res.json();
 
-        if (!Array.isArray(data)) {
+        if (!data.success || !Array.isArray(data.schedules)) {
           console.error("Unexpected data format:", data);
           setAppointments([]);
           return;
         }
 
         // Separate today's schedules and sort them on top
-        const todaySchedules = data.filter((s) => isToday(s.date));
-        // const otherSchedules = data.filter((s) => !isToday(s.date));
+        const todaySchedules = data.schedules.filter((s) => isToday(s.date));
         const sortedList = [...todaySchedules];
 
         setAppointments(sortedList);
@@ -63,6 +62,11 @@ const TodaysAppointments = () => {
 
     fetchAppointments();
   }, [token]);
+
+  const handleScheduleClick = () => {
+    // Redirect to /schedules page
+    navigate("/schedules"); // Updated to use navigate instead of useHistory
+  };
 
   if (loading) {
     return (
@@ -85,10 +89,14 @@ const TodaysAppointments = () => {
         <div>
           {appointments.map((appt) => (
             <div
-              key={appt._id}
+              key={appt.scheduleId}
               className={`d-flex justify-content-between align-items-center rounded-3 p-3 mb-2 ${
-                isToday(appt.date) ? "bg-light border-start border-3 border-success" : "bg-white shadow-sm"
+                isToday(appt.date)
+                  ? "bg-light border-start border-3 border-success"
+                  : "bg-white shadow-sm"
               }`}
+              onClick={handleScheduleClick} // Clickable div
+              style={{ cursor: "pointer" }}
             >
               {/* Left: Patient info */}
               <div className="d-flex align-items-center">
@@ -119,6 +127,11 @@ const TodaysAppointments = () => {
                     {formatDate(appt.date)} •{" "}
                     {formatTimeRange(appt.startTime, appt.endTime)}
                   </small>
+                  <div className="mt-2 text-muted small">
+                    {/* Showing scheduleId and bed details */}
+                    <p>Schedule ID: {appt.scheduleId}</p>
+                    <p>Bed Code: {appt.bed?.code}</p>
+                  </div>
                 </div>
               </div>
 

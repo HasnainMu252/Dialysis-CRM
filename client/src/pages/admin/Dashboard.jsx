@@ -9,6 +9,7 @@ import TodaysAppointments from "../../components/TodaysAppointments";
 import BedAvailabilityCard from "../../components/BedAvailabilityCard";
 import Slider from "../../components/Slider";
 import BedAdd from "../../components/BedADD";
+import StatsOverviewCard from "../../components/StatsCard";
 
 const AdminDashboard = () => {
   const [stats, setStats] = useState({
@@ -223,7 +224,7 @@ const AdminDashboard = () => {
           </div>
           <div className="col-sm-4">
             <div className="card border-0">
-              <BedAvailabilityCard />
+                  <StatsOverviewCard />
             </div>
           </div>
         </div>
