@@ -8,6 +8,7 @@ import {
   assignStaff,
   removeStaff,
   todayWorkload,
+  deleteShift,
 } from "../controllers/shift.controller.js";
 
 const router = Router();
@@ -23,5 +24,6 @@ router.delete("/:code/staff/:userId", authorizeRoles("Admin"), removeStaff);
 router.get("/", authorizeRoles("Admin"), listShifts);
 router.get("/workload/today", authorizeRoles("Admin"), todayWorkload);
 router.get("/:code", authorizeRoles("Admin"), getShift);
+router.delete("/:code", authorizeRoles("Admin"), deleteShift); // ✅ DELETE
 
 export default router;

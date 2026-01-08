@@ -57,7 +57,10 @@ export const createBilling = async (req, res) => {
       status: "Pending",
     });
 
-    const populated = await Billing.findById(bill._id).populate("patient", "firstName lastName mrn");
+    const populated = await Billing.findById(bill._id).populate(
+      "patient",
+      "firstName lastName mrn"
+    );
 
     return res.status(201).json({
       success: true,
@@ -68,7 +71,6 @@ export const createBilling = async (req, res) => {
     return res.status(500).json({ success: false, message: "Server error", error: e.message });
   }
 };
-
 
 // GET /api/billing?patientMrn=&status=&from=&to=
 export const listBilling = async (req, res) => {
@@ -90,9 +92,8 @@ export const listBilling = async (req, res) => {
       .sort({ createdAt: -1 })
       .limit(200);
 
-      console.log("Billing import =>", Billing);
-console.log("Billing.find =>", Billing?.find);
-
+    console.log("Billing import =>", Billing);
+    console.log("Billing.find =>", Billing?.find);
 
     return res.json({ success: true, count: bills.length, billings: bills.map(formatBilling) });
   } catch (e) {
@@ -103,8 +104,13 @@ console.log("Billing.find =>", Billing?.find);
 // GET /api/billing/:code
 export const getBilling = async (req, res) => {
   try {
-    const b = await Billing.findOne({ code: req.params.code }).populate("patient", "firstName lastName mrn");
+    const b = await Billing.findOne({ code: req.params.code }).populate(
+      "patient",
+      "firstName lastName mrn"
+    );
+
     if (!b) return res.status(404).json({ success: false, message: "Billing not found" });
+
     return res.json({ success: true, billing: formatBilling(b) });
   } catch (e) {
     return res.status(500).json({ success: false, message: "Server error", error: e.message });
@@ -112,12 +118,28 @@ export const getBilling = async (req, res) => {
 };
 
 // PATCH /api/billing/:code (update amount/method/notes/status)
+// PUT /api/billing/:code
 export const updateBilling = async (req, res) => {
   try {
     const updates = { ...req.body };
 
-    // If status becomes Paid, set paidAt automatically
-    if (updates.status === "Paid") updates.paidAt = new Date();
+    if (updates.amount != null) updates.amount = Number(updates.amount);
+
+    // ✅ If marked paid, set paidAt
+    if (updates.status === "Paid") {
+      updates.paidAt = updates.paidAt ? new Date(updates.paidAt) : new Date();
+
+      // ✅ sync schedule paymentStatus = Paid
+      const billCode = req.params.code;
+      const b2 = await Billing.findOne({ code: billCode }); // current billing
+      if (b2?.scheduleCode) {
+        await Schedule.findOneAndUpdate(
+          { code: b2.scheduleCode },
+          { paymentStatus: "Paid" },
+          { new: true }
+        );
+      }
+    }
 
     const b = await Billing.findOneAndUpdate({ code: req.params.code }, updates, {
       new: true,
@@ -137,6 +159,7 @@ export const deleteBilling = async (req, res) => {
   try {
     const b = await Billing.findOneAndDelete({ code: req.params.code });
     if (!b) return res.status(404).json({ success: false, message: "Billing not found" });
+
     return res.json({ success: true, message: "Billing deleted" });
   } catch (e) {
     return res.status(500).json({ success: false, message: "Server error", error: e.message });

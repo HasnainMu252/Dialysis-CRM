@@ -1,12 +1,17 @@
+// models/billing.model.js
 import mongoose from "mongoose";
+import Counter from "./counter.model.js";
+
+export const BillingStatus = ["Pending", "Paid", "Cancelled", "Refunded"];
+export const PaymentMethods = ["Cash", "Card", "Bank", "Online"];
+
+function formatBillingCode(n) {
+  return `BL-${n.toString().padStart(6, "0")}`; // BL-000001
+}
 
 const billingSchema = new mongoose.Schema(
   {
-    // Auto increment-like numeric id (optional)
-    billingId: { type: Number, index: true },
-
-    // Unique readable code like: BILL-000001
-    code: { type: String, required: true, unique: true, index: true },
+    code: { type: String, unique: true, index: true },
 
     patientMrn: { type: String, required: true, index: true },
     patient: { type: mongoose.Schema.Types.ObjectId, ref: "Patient", required: true },
@@ -16,46 +21,41 @@ const billingSchema = new mongoose.Schema(
 
     amount: { type: Number, required: true, min: 0 },
 
-    paymentMethod: {
-      type: String,
-      required: true,
-      enum: ["Cash", "Card", "Bank", "Online", "Other"],
-      default: "Cash",
-    },
+    paymentMethod: { type: String, enum: PaymentMethods, required: true },
 
-    status: {
-      type: String,
-      enum: ["Pending", "Paid", "Cancelled", "Refunded"],
-      default: "Pending",
-      index: true,
-    },
-
+    status: { type: String, enum: BillingStatus, default: "Pending" },
     paidAt: { type: Date, default: null },
+
     notes: { type: String, default: "" },
   },
   { timestamps: true }
 );
 
-// Generate billingId + code automatically if not provided
-billingSchema.pre("validate", async function (next) {
+billingSchema.pre("save", async function (next) {
+  if (this.code) return next();
   try {
-    if (this.code && this.billingId) return next();
-
-    // If you want a simple "sequence" without a separate counters collection:
-    // we derive next id from latest billingId (works fine for small apps; for heavy concurrency use counters)
-    const last = await mongoose.model("Billing").findOne({}, { billingId: 1 }).sort({ billingId: -1 }).lean();
-
-    const nextId = (last?.billingId || 0) + 1;
-    this.billingId = this.billingId ?? nextId;
-
-    // Code format: BILL-000001
-    this.code = this.code ?? `BILL-${String(nextId).padStart(6, "0")}`;
-
+    const counter = await Counter.findOneAndUpdate(
+      { name: "billing_code" },
+      { $inc: { seq: 1 } },
+      { new: true, upsert: true }
+    );
+    this.code = formatBillingCode(counter.seq);
     next();
-  } catch (err) {
-    next(err);
+  } catch (e) {
+    next(e);
   }
 });
 
-const Billing = mongoose.model("Billing", billingSchema);
-export default Billing;
+billingSchema.virtual("billingId").get(function () {
+  return this.code || null;
+});
+
+billingSchema.set("toJSON", {
+  virtuals: true,
+  transform: (_doc, ret) => {
+    delete ret.__v;
+    return ret;
+  },
+});
+
+export default mongoose.model("Billing", billingSchema);

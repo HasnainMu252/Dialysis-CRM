@@ -1,7 +1,6 @@
 // controllers/bed.controller.js
 import Bed from "../models/bed.model.js";
 
-//
 // ───────────────────────── CREATE ─────────────────────────
 //
 

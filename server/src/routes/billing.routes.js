@@ -6,17 +6,21 @@ import {
   getBilling,
   updateBilling,
   deleteBilling,
-
 } from "../controllers/billing.controller.js";
 
 const router = Router();
 
 router.use(requireAuth);
+
+// list
 router.get("/", listBilling);
-router.get("/:id", getBilling);
+
+// ✅ use billing CODE everywhere
+router.get("/:code", getBilling);
+
+// create/update/delete
 router.post("/", authorizeRoles("Biller", "Admin"), createBilling);
-router.put("/:id", authorizeRoles("Biller", "Admin"), updateBilling);
-router.delete("/:id", authorizeRoles("Admin"), deleteBilling);
+router.put("/:code", authorizeRoles("Biller", "Admin"), updateBilling);
+router.delete("/:code", authorizeRoles("Admin"), deleteBilling);
 
 export default router;
-    

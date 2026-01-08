@@ -15,6 +15,7 @@ import lifecycleRoutes from "./routes/sessionLifecycle.routes.js";
 import maintenanceRoutes from "./routes/bedMaintenance.routes.js";
 import billingRoutes from "./routes/billing.routes.js";
 import referrals from "./routes/referral.routes.js";
+import patientsRoutes from "./routes/patient.routes.js";
 
 
 
@@ -33,8 +34,8 @@ app.use("/api-docs", swaggerUi.serve, swaggerUi.setup(swaggerDocument));
 
 app.use(
   cors({
-    origin: ["http://localhost:5173", "http://localhost:3000"],
-    methods: ["GET", "POST", "PUT", "DELETE"],
+    origin: ["http://localhost:5173", "http://localhost:4000"],
+    methods: ["GET", "POST", "PUT", "DELETE","PATCH"],
     credentials: true,
   })
 );
@@ -47,8 +48,6 @@ app.use("/api/auth", authRoutes); // Register the auth routes
 
 // Routes
 app.get("/api/health", (_req, res) => res.json({ status: "ok" }));
-app.use("/api/auth", authRoutes);
-app.use("/api/auth/me", authRoutes);
 app.use("/api/patients", patientRoutes);
 app.use("/api/schedules", scheduleRoutes);
 app.use("/api/shifts", shiftRoutes);
@@ -61,12 +60,14 @@ app.use("/api/referrals", referrals);
 
 
 
+app.use("/api/patients", patientsRoutes);
+
 // Error Handlers
 app.use(notFound);
 app.use(errorHandler);
 
 // Server start
-const PORT = process.env.PORT || 5000;
+const PORT = process.env.PORT || 4000;
 connectDB().then(() => {
   app.listen(PORT, () => console.log(`✅ Server running on port ${PORT}`));
 });

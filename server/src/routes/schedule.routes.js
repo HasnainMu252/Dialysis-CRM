@@ -11,7 +11,12 @@ import {
   deleteSchedule,
   deleteAllSchedules,
   requestCancel,
-  approveCancel
+  approveCancel,
+  availability,
+  patientRequestSchedule,
+  nurseSchedules,
+  rejectSchedule,
+  approveSchedule,
 } from "../controllers/schedule.controller.js";
 
 import { requireAuth, authorizeRoles } from "../middleware/auth.js";
@@ -73,6 +78,12 @@ router.patch(
   authorizeRoles("Admin", "CaseManager", "Nurse"),
   updateSchedule
 );
+// available 
+
+router.get("/availability", requireAuth, availability); 
+
+// patient request routes
+router.post("/patient/request", requireAuth, authorizeRoles("Patient"), patientRequestSchedule);
 
 /* ================================
    📌 DELETE SINGLE SCHEDULE BY CODE
@@ -114,5 +125,12 @@ router.patch(
   authorizeRoles("Admin", "CaseManager"),
   approveCancel
 );
+
+// for approval of schedule reeject and accept by admin/manger
+router.patch("/:code/approve", requireAuth, authorizeRoles("Admin","CaseManager"), approveSchedule);
+router.patch("/:code/reject", requireAuth, authorizeRoles("Admin","CaseManager"), rejectSchedule);
+
+// Assigned shift patients + lifecycle actions
+router.get("/nurse/my", requireAuth, authorizeRoles("Nurse"), nurseSchedules);
 
 export default router;

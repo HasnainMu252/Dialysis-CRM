@@ -49,9 +49,10 @@ const patientSchema = new mongoose.Schema(
 
     dialysis: dialysisSchema,
 
-    status: { type: String, enum: ["Active", "Inactive"], default: "Active" },
+    status: { type: String, enum: ["Pending", "Active", "Inactive"], default: "Pending" },
+
   },
-  { timestamps: true }
+  { timestamps: true } 
 );
 
 /**

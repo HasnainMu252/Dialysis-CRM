@@ -2,83 +2,109 @@ import Schedule from "../models/schedule.model.js";
 import Bed from "../models/bed.model.js";
 import Settings from "../models/settings.model.js";
 
+const addMinutes = (d, m) => new Date(d.getTime() + m * 60000);
+
 const getMaintenanceMinutes = async () => {
   const s = await Settings.findOne();
   return s?.maintenanceMinutes ?? 30;
 };
 
 export const checkIn = async (req, res) => {
-  const { code } = req.params;
+  try {
+    const { code } = req.params;
 
-  const sch = await Schedule.findOne({ code });
-  if (!sch) return res.status(404).json({ success:false, message:"Schedule not found" });
+    const sch = await Schedule.findOne({ code });
+    if (!sch)
+      return res.status(404).json({ success: false, message: "Schedule not found" });
 
-  sch.state = "CheckedIn";
-  sch.actualStartAt = sch.actualStartAt || new Date();
-  await sch.save();
+    sch.state = "CheckedIn";
+    sch.actualStartAt = sch.actualStartAt || new Date();
+    await sch.save();
 
-  // mark bed busy
-  await Bed.findByIdAndUpdate(sch.bed, { status: "Busy" });
+    // mark bed busy
+    await Bed.findByIdAndUpdate(sch.bed, { status: "Busy" });
 
-  res.json({ success:true, message:"Checked-In", schedule: sch });
+    return res.json({ success: true, message: "Checked-In", schedule: sch });
+  } catch (err) {
+    return res.status(500).json({ success: false, message: err?.message || "Server error" });
+  }
 };
 
 export const startSession = async (req, res) => {
-  const { code } = req.params;
+  try {
+    const { code } = req.params;
 
-  const sch = await Schedule.findOne({ code });
-  if (!sch) return res.status(404).json({ success:false, message:"Schedule not found" });
+    const sch = await Schedule.findOne({ code });
+    if (!sch)
+      return res.status(404).json({ success: false, message: "Schedule not found" });
 
-  sch.state = "InProgress";
-  sch.actualStartAt = sch.actualStartAt || new Date();
-  await sch.save();
+    sch.state = "InProgress";
+    sch.actualStartAt = sch.actualStartAt || new Date();
+    await sch.save();
 
-  await Bed.findByIdAndUpdate(sch.bed, { status: "Busy" });
+    await Bed.findByIdAndUpdate(sch.bed, { status: "Busy" });
 
-  res.json({ success:true, message:"Session In-Progress", schedule: sch });
+    return res.json({ success: true, message: "Session In-Progress", schedule: sch });
+  } catch (err) {
+    return res.status(500).json({ success: false, message: err?.message || "Server error" });
+  }
 };
 
 export const completeSession = async (req, res) => {
-  const { code } = req.params;
+  try {
+    const { code } = req.params;
 
-  const sch = await Schedule.findOne({ code });
-  if (!sch) return res.status(404).json({ success:false, message:"Schedule not found" });
+    const sch = await Schedule.findOne({ code });
+    if (!sch)
+      return res.status(404).json({ success: false, message: "Schedule not found" });
 
-  sch.state = "Completed";
-  sch.actualEndAt = new Date();
-  await sch.save();
+    // ✅ mark schedule completed
+    sch.state = "Completed";
+    sch.actualEndAt = new Date();
+    await sch.save();
 
-  const minutes = await getMaintenanceMinutes();
-  const maintenanceUntil = new Date(Date.now() + minutes * 60 * 1000);
+    // ✅ lock bed in maintenance for X minutes (from Settings)
+    const minutes = await getMaintenanceMinutes();
+    const maintenanceUntil = addMinutes(new Date(), minutes);
 
-  await Bed.findByIdAndUpdate(sch.bed, {
-    status: "UnderMaintenance",
-    maintenanceUntil,
-    lastMaintenanceAt: new Date(),
-  });
+    await Bed.findByIdAndUpdate(sch.bed, {
+      status: "UnderMaintenance", // (use "Maintenance" if that's what your Bed enum expects)
+      maintenanceUntil,
+      lastMaintenanceAt: new Date(),
+    });
 
-  // optional: set schedule state to Maintenance also
-  // sch.state = "Maintenance"; await sch.save();
+    // Optional: if you also want schedule to show Maintenance state
+    // sch.state = "Maintenance";
+    // await sch.save();
 
-  res.json({
-    success:true,
-    message:`Completed. Bed locked for ${minutes} min`,
-    schedule: sch,
-    maintenanceUntil,
-  });
+    return res.json({
+      success: true,
+      message: `Completed. Bed locked for ${minutes} min`,
+      schedule: sch,
+      maintenanceUntil,
+    });
+  } catch (err) {
+    return res.status(500).json({ success: false, message: err?.message || "Server error" });
+  }
 };
 
 export const markNoShow = async (req, res) => {
-  const { code } = req.params;
+  try {
+    const { code } = req.params;
 
-  const sch = await Schedule.findOne({ code });
-  if (!sch) return res.status(404).json({ success:false, message:"Schedule not found" });
+    const sch = await Schedule.findOne({ code });
+    if (!sch)
+      return res.status(404).json({ success: false, message: "Schedule not found" });
 
-  sch.state = "NoShow";
-  await sch.save();
+    sch.state = "NoShow";
+    await sch.save();
 
-  // free bed
-  await Bed.findByIdAndUpdate(sch.bed, { status: "Available" });
+    // free bed
+    await Bed.findByIdAndUpdate(sch.bed, { status: "Available" });
 
-  res.json({ success:true, message:"Marked as No-Show", schedule: sch });
+    return res.json({ success: true, message: "Marked as No-Show", schedule: sch });
+  } catch (err) {
+    return res.status(500).json({ success: false, message: err?.message || "Server error" });
+  }
 };
+3

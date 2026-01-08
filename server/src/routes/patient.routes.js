@@ -1,27 +1,41 @@
 import { Router } from "express";
-import { requireAuth, authorizeRoles } from "../middleware/auth.js";
-import { createPatient,getPatientProfile, listPatients, getPatient, updatePatient, removePatient,deleteAllPatients } from "../controllers/patient.controller.js";
+import {
+  requireAuth,
+  authorizeRoles,
+  requirePatientAuth,
+} from "../middleware/auth.js";
+
+import {
+  createPatient,
+  getPatientProfile,
+  listPatients,
+  getPatient,
+  updatePatient,
+  removePatient,
+  deleteAllPatients,
+} from "../controllers/patient.controller.js";
 
 const router = Router();
 
-// Nurses, Case Managers, Admins can read; only Admin/CaseManager can create/update/delete (example policy)
+/**
+ * ✅ PATIENT SELF ROUTE (no staff requireAuth here)
+ * Patient token will work now.
+ */
+router.get("/me", requirePatientAuth, getPatientProfile);
+
+/**
+ * ✅ STAFF ROUTES ONLY (everything below requires staff token)
+ */
 router.use(requireAuth);
 
-// for login
-router.get("/me", requireAuth, getPatientProfile);
-
-
+// Staff list + CRUD
 router.get("/", listPatients);
 router.post("/", authorizeRoles("Admin", "CaseManager"), createPatient);
-router.get("/:mrn",  getPatient);
+router.get("/:mrn", getPatient);
 router.put("/:mrn", authorizeRoles("Admin", "CaseManager"), updatePatient);
 router.delete("/:mrn", authorizeRoles("Admin"), removePatient);
 
-
-
-// 🔥 bulk delete (Admin only) with guard
+// Bulk delete (Admin only)
 router.delete("/", authorizeRoles("Admin"), deleteAllPatients);
-
-
 
 export default router;

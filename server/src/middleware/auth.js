@@ -75,3 +75,26 @@ export const authorizeRoles = (...allowed) => (req, res, next) => {
   if (!allowed.includes(req.user.role)) return res.status(403).json({ message: "Forbidden" });
   next();
 };
+
+
+export const requirePatientAuth = (req, res, next) => {
+  try {
+    const header = req.headers.authorization || "";
+    const token = header.startsWith("Bearer ") ? header.slice(7) : null;
+
+    if (!token) return res.status(401).json({ message: "Patient token missing" });
+
+    const decoded = jwt.verify(token, process.env.JWT_SECRET);
+
+    // ✅ Must be patient token AND must include identity
+    if (decoded?.tokenType !== "patient" || (!decoded?.patientId && !decoded?.mrn)) {
+      return res.status(401).json({ message: "Not a patient token" });
+    }
+
+    req.patient = decoded; // { tokenType, patientId, mrn }
+    next();
+  } catch (e) {
+    return res.status(401).json({ message: "Invalid patient token" });
+  }
+};
+

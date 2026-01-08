@@ -3,28 +3,22 @@ import mongoose from "mongoose";
 import Schedule from "../models/schedule.model.js";
 import Billing from "../models/billing.model.js";
 
+
+export const patientMe = async (req, res) => {
+  res.json({ patient: req.patient });
+};
+
+
 export const getPatientProfile = async (req, res) => {
-  try {
-    const patient = await Patient.findById(req.user.id).select("-password");
+  const { patientId, mrn } = req.patient || {};
 
-    if (!patient) {
-      return res.status(404).json({
-        success: false,
-        message: "Patient not found",
-      });
-    }
+  const patient = patientId
+    ? await Patient.findById(patientId).select("-password")
+    : await Patient.findOne({ mrn }).select("-password");
 
-    res.json({
-      success: true,
-      patient,
-    });
-  } catch (err) {
-    res.status(500).json({
-      success: false,
-      message: "Server error",
-      error: err.message,
-    });
-  }
+  if (!patient) return res.status(404).json({ message: "Patient not found" });
+
+  return res.json({ data: patient });
 };
 
 export const createPatient = async (req, res) => {
@@ -285,3 +279,4 @@ export const getPatientBillings = async (req, res) => {
     });
   }
 };
+

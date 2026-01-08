@@ -2,7 +2,7 @@
 import Schedule from "../models/schedule.model.js";
 import Patient from "../models/patient.model.js";
 import Bed from "../models/bed.model.js";
-
+import Shift from "../models/shift.model.js";
 // Regex for date and time validation
 const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
 const TIME_RE = /^([01]\d|2[0-3]):[0-5]\d$/;
@@ -374,6 +374,12 @@ export const getSchedulesByPatientMrn = async (req, res) => {
     const { mrn } = req.params;
 
     // Verify patient exists
+
+    if (req.authType === "patient") {
+  if (req.patient?.mrn !== req.params.mrn) {
+    return res.status(403).json({ success: false, message: "Forbidden" });
+  }
+}
     const patient = await Patient.findOne({ mrn });
     if (!patient) {
       return res.status(404).json({
@@ -736,3 +742,133 @@ export const approveCancel = async (req, res) => {
     });
   }
 };
+
+
+
+
+
+export const availability = async (req, res) => {
+  const { date, shiftCode } = req.query;
+  if (!date || !shiftCode) {
+    return res.status(400).json({ success:false, message:"date and shiftCode required" });
+  }
+
+  const shift = await Shift.findOne({ code: shiftCode });
+  if (!shift) return res.status(404).json({ success:false, message:"Shift not found" });
+
+  const dayStart = new Date(date);
+  dayStart.setHours(0,0,0,0);
+  const dayEnd = new Date(dayStart);
+  dayEnd.setDate(dayEnd.getDate()+1);
+
+  const beds = await Bed.find({});
+  const activeBeds = beds.filter(b => b.status !== "Maintenance" && b.status !== "Occupied" && b.status !== "Busy");
+
+  const booked = await Schedule.find({
+    date: { $gte: dayStart, $lt: dayEnd },
+    shiftCode,
+    status: { $in: ["PendingApproval","Confirmed"] }
+  }).select("bedCode");
+
+  const bookedCodes = new Set(booked.map(x => x.bedCode).filter(Boolean));
+
+  const availableBeds = activeBeds.filter(b => !bookedCodes.has(b.code));
+
+  return res.json({
+    success:true,
+    shift: { code: shift.code, name: shift.name, startTime: shift.startTime, endTime: shift.endTime },
+    availableBeds: availableBeds.map(b => ({ code: b.code, name: b.name, type: b.type, status: b.status })),
+  });
+};
+
+export const patientRequestSchedule = async (req, res) => {
+  const { patientMrn, date, shiftCode, bedCode, amount, paymentMethod } = req.body;
+
+  if (!patientMrn || !date || !shiftCode || !bedCode || !amount || !paymentMethod) {
+    return res.status(400).json({ success:false, message:"Missing required fields" });
+  }
+
+  // create schedule request (Unpaid first)
+  const schedule = await Schedule.create({
+    patientMrn,
+    date: new Date(date),
+    shiftCode,
+    bedCode,
+    status: "PendingApproval",      // request after payment (we’ll enforce Paid before approve)
+    state: "Scheduled",
+    source: "Patient",
+    approval: { requestedAt: new Date() },
+    paymentStatus: "Unpaid"
+  });
+
+  // create bill Pending
+  const bill = await Billing.create({
+    patientMrn,
+    scheduleCode: schedule.code,
+    amount: Number(amount),
+    paymentMethod,
+    status: "Pending"
+  });
+
+  schedule.billingCode = bill.code;
+  await schedule.save();
+
+  return res.status(201).json({
+    success:true,
+    message:"Request created. Please pay to proceed.",
+    scheduleCode: schedule.code,
+    billingCode: bill.code
+  });
+};
+
+// approve or reject the schedule  
+export const approveSchedule = async (req, res) => {
+  const { code } = req.params;
+
+  const s = await Schedule.findOne({ code });
+  if (!s) return res.status(404).json({ success:false, message:"Schedule not found" });
+
+  if (s.paymentStatus !== "Paid") {
+    return res.status(400).json({ success:false, message:"Cannot approve. Payment not received." });
+  }
+
+  s.status = "Confirmed";
+  s.approval.approvedAt = new Date();
+  s.approval.approvedBy = req.user.id;
+  await s.save();
+
+  return res.json({ success:true, message:"Approved", schedule:s });
+};
+
+export const rejectSchedule = async (req, res) => {
+  const { code } = req.params;
+  const { reason } = req.body;
+
+  const s = await Schedule.findOne({ code });
+  if (!s) return res.status(404).json({ success:false, message:"Schedule not found" });
+
+  s.status = "Cancelled";
+  s.approval.rejectedAt = new Date();
+  s.approval.rejectedBy = req.user.id;
+  s.approval.reason = reason || "Rejected";
+  await s.save();
+
+  return res.json({ success:true, message:"Rejected", schedule:s });
+};
+
+// Nurse assign the shift paitient
+
+export const nurseSchedules = async (req, res) => {
+  // If nurse is assigned via shift.staff, easiest is filter by shiftCode that contains nurse
+  // For now simplest: return today's Confirmed schedules
+  const today = new Date(); today.setHours(0,0,0,0);
+  const tomorrow = new Date(today); tomorrow.setDate(tomorrow.getDate()+1);
+
+  const list = await Schedule.find({
+    date: { $gte: today, $lt: tomorrow },
+    status: "Confirmed",
+  }).sort({ startAt: 1 });
+
+  return res.json({ success:true, schedules:list });
+};
+

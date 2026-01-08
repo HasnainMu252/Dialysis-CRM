@@ -2,6 +2,7 @@ import Shift from "../models/shift.model.js";
 import User from "../models/user.model.js";
 import Schedule from "../models/schedule.model.js";
 
+
 export const createShift = async (req, res) => {
   try {
     const { name, startTime, endTime, isActive } = req.body;
@@ -115,3 +116,46 @@ export const todayWorkload = async (_req, res) => {
   res.json({ success: true, workload: result });
 };
     
+
+export const deleteShift = async (req, res) => {
+  try {
+    const { code } = req.params;
+
+    // 🔍 Find shift by auto-generated code
+    const shift = await Shift.findOne({ code });
+    if (!shift) {
+      return res.status(404).json({
+        success: false,
+        message: "Shift not found",
+      });
+    }
+
+    // 🛑 OPTIONAL SAFETY (recommended)
+    // Prevent deleting shifts already used in schedules
+    const hasSchedules = await Schedule.exists({
+      $or: [{ shiftCode: code }, { shift: shift._id }],
+    });
+
+    if (hasSchedules) {
+      return res.status(400).json({
+        success: false,
+        message: "Cannot delete shift with existing schedules. Deactivate it instead.",
+      });
+    }
+
+    // ❌ Delete shift
+    await Shift.deleteOne({ _id: shift._id });
+
+    return res.json({
+      success: true,
+      message: "Shift deleted successfully",
+      code,
+    });
+  } catch (e) {
+    return res.status(500).json({
+      success: false,
+      message: "Server error",
+      error: e.message,
+    });
+  }
+};
