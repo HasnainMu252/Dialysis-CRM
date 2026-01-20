@@ -1,7 +1,7 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import Input from "../ui/Input";
 import Button from "../ui/Button";
-import { listNurses } from "../../api/users.api";
+import { listUsers } from "../../api/users.api";
 
 const SHIFT_NAME_OPTIONS = ["Morning", "Evening", "Night", "Afternoon"];
 const TIME_PRESETS = {
@@ -11,132 +11,192 @@ const TIME_PRESETS = {
   Afternoon: { startTime: "12:00", endTime: "18:00" },
 };
 
-// ✅ helper: show up to 5 selected names + “+X more”
-const selectedPreview = (selectedUsers = [], max = 5) => {
-  const names = selectedUsers
-    .map((u) => u?.name || u?.fullName || u?.email || "Unknown")
+// ✅ Extract staff IDs from initial data (handles all possible structures)
+const extractStaffIds = (staff) => {
+  if (!staff || !Array.isArray(staff)) return [];
+
+  return staff
+    .map((s) => {
+      if (typeof s === "string") return s;
+      
+      // Handle: { userId: { id: "xxx" } } or { userId: { _id: "xxx" } }
+      if (s?.userId && typeof s.userId === "object") {
+        return s.userId.id || s.userId._id;
+      }
+      
+      // Handle: { userId: "xxx" }
+      if (s?.userId && typeof s.userId === "string") {
+        return s.userId;
+      }
+      
+      // Handle: { id: "xxx" } or { _id: "xxx" }
+      return s?.id || s?._id;
+    })
     .filter(Boolean);
-
-  const shown = names.slice(0, max);
-  const more = names.length - shown.length;
-
-  return { shown, more, total: names.length };
 };
 
 export default function ShiftForm({ initial = {}, onSubmit, submitText = "Save" }) {
-  const [v, setV] = useState({
+  // ✅ State
+  const [formData, setFormData] = useState({
     code: initial.code || "",
     name: initial.name || "Morning",
     startTime: initial.startTime || "",
     endTime: initial.endTime || "",
     isActive: initial.isActive ?? true,
-    nurseIds: (initial.staff || [])
-      .map((s) => s?.userId?._id)
-      .filter(Boolean),
+    staffIds: extractStaffIds(initial.staff),
   });
 
   const [err, setErr] = useState("");
   const [saving, setSaving] = useState(false);
+  const [allUsers, setAllUsers] = useState([]);
+  const [isDropdownOpen, setIsDropdownOpen] = useState(false);
+  const [searchQuery, setSearchQuery] = useState("");
+  const dropdownRef = useRef(null);
 
-  // nurses dropdown
-  const [nurses, setNurses] = useState([]);
-  const [nOpen, setNOpen] = useState(false);
-  const [nQuery, setNQuery] = useState("");
-  const nWrap = useRef(null);
-
+  // ✅ Update staffIds when initial changes (for edit mode)
   useEffect(() => {
-    const onDoc = (e) => {
-      if (nWrap.current && !nWrap.current.contains(e.target)) setNOpen(false);
+    const ids = extractStaffIds(initial.staff);
+    console.log("[ShiftForm] Initial staff extracted:", ids);
+    setFormData((prev) => ({ ...prev, staffIds: ids }));
+  }, [initial.staff]);
+
+  // ✅ Close dropdown on outside click
+  useEffect(() => {
+    const handleClickOutside = (e) => {
+      if (dropdownRef.current && !dropdownRef.current.contains(e.target)) {
+        setIsDropdownOpen(false);
+      }
     };
-    document.addEventListener("mousedown", onDoc);
-    return () => document.removeEventListener("mousedown", onDoc);
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
   }, []);
 
+  // ✅ Fetch users
   useEffect(() => {
     let mounted = true;
-    (async () => {
+
+    const fetchUsers = async () => {
       try {
-        const res = await listNurses();
-        const list = Array.isArray(res.data?.nurses) ? res.data.nurses : [];
-        if (mounted) setNurses(list);
+        const res = await listUsers();
+        const userList = Array.isArray(res.data?.users) ? res.data.users : [];
+        console.log("[ShiftForm] Users loaded:", userList.length);
+        if (mounted) setAllUsers(userList);
       } catch (e) {
-        console.log("Nurses load failed:", e?.message);
+        console.error("[ShiftForm] Failed to load users:", e?.message);
       }
-    })();
-    return () => {
-      mounted = false;
     };
+
+    fetchUsers();
+    return () => { mounted = false; };
   }, []);
 
-  const filteredNurses = useMemo(() => {
-    const s = nQuery.trim().toLowerCase();
-    if (!s) return nurses.slice(0, 10);
-    return nurses
+  // ✅ Filter staff (exclude Admins)
+  const filteredStaff = useMemo(() => {
+    const query = searchQuery.trim().toLowerCase();
+    const nonAdmins = allUsers.filter((u) => u.role !== "Admin");
+
+    if (!query) return nonAdmins.slice(0, 15);
+
+    return nonAdmins
       .filter((u) => {
         const name = (u.name || "").toLowerCase();
         const email = (u.email || "").toLowerCase();
-        return name.includes(s) || email.includes(s);
+        return name.includes(query) || email.includes(query);
       })
-      .slice(0, 10);
-  }, [nurses, nQuery]);
+      .slice(0, 15);
+  }, [allUsers, searchQuery]);
 
-  // ✅ selected nurse objects for preview chips
-  const selectedNurses = useMemo(() => {
-    const setIds = new Set(v.nurseIds);
-    return nurses.filter((u) => setIds.has(u._id));
-  }, [nurses, v.nurseIds]);
+  // ✅ Get selected staff objects for display chips
+  const selectedStaffObjects = useMemo(() => {
+    return allUsers.filter((user) => formData.staffIds.includes(user.id));
+  }, [allUsers, formData.staffIds]);
 
-  const { shown, more, total } = useMemo(
-    () => selectedPreview(selectedNurses, 5),
-    [selectedNurses]
-  );
-
-  const applyPresetIfEmpty = (name) => {
-    const p = TIME_PRESETS[name];
-    if (!p) return;
-    // only auto-fill if empty
-    setV((prev) => ({
-      ...prev,
-      name,
-      startTime: prev.startTime || p.startTime,
-      endTime: prev.endTime || p.endTime,
-    }));
+  // ✅ Check if staff is selected (use user.id from API)
+  const isStaffSelected = (userId) => {
+    return formData.staffIds.includes(userId);
   };
 
-  const toggleNurse = (id) => {
-    setV((prev) => {
-      const has = prev.nurseIds.includes(id);
-      return {
-        ...prev,
-        nurseIds: has ? prev.nurseIds.filter((x) => x !== id) : [...prev.nurseIds, id],
-      };
+  // ✅ Toggle staff selection
+  const handleToggleStaff = (userId, userName) => {
+    if (!userId) {
+      console.error("[ShiftForm] Invalid userId");
+      return;
+    }
+
+    setFormData((prev) => {
+      const isCurrentlySelected = prev.staffIds.includes(userId);
+      console.log(`[ShiftForm] Toggle: ${userName} (${userId}) | Selected: ${isCurrentlySelected}`);
+
+      const newStaffIds = isCurrentlySelected
+        ? prev.staffIds.filter((id) => id !== userId)
+        : [...prev.staffIds, userId];
+
+      console.log("[ShiftForm] Updated staffIds:", newStaffIds);
+      return { ...prev, staffIds: newStaffIds };
     });
   };
 
+  // ✅ Remove staff by ID
+  const handleRemoveStaff = (userId) => {
+    setFormData((prev) => ({
+      ...prev,
+      staffIds: prev.staffIds.filter((id) => id !== userId),
+    }));
+  };
+
+  // ✅ Clear all staff
+  const handleClearAll = () => {
+    setFormData((prev) => ({ ...prev, staffIds: [] }));
+  };
+
+  // ✅ Apply time preset
+  const applyPreset = (shiftName) => {
+    const preset = TIME_PRESETS[shiftName];
+    if (!preset) return;
+
+    setFormData((prev) => ({
+      ...prev,
+      name: shiftName,
+      startTime: preset.startTime,
+      endTime: preset.endTime,
+    }));
+  };
+
+  // ✅ Validation
   const validate = () => {
-    if (!v.name) return "Shift name is required";
-    if (!v.startTime) return "Start time is required";
-    if (!v.endTime) return "End time is required";
+    if (!formData.name) return "Shift name is required";
+    if (!formData.startTime) return "Start time is required";
+    if (!formData.endTime) return "End time is required";
     return "";
   };
 
-  const submit = async (e) => {
+  // ✅ Submit handler
+  const handleSubmit = async (e) => {
     e.preventDefault();
     setErr("");
-    const m = validate();
-    if (m) return setErr(m);
+
+    const validationError = validate();
+    if (validationError) return setErr(validationError);
 
     try {
       setSaving(true);
-      await onSubmit({
-        code: v.code, // optional (backend can generate)
-        name: v.name,
-        startTime: v.startTime,
-        endTime: v.endTime,
-        isActive: v.isActive,
-        nurseIds: v.nurseIds,
-      });
+
+      const payload = {
+        name: formData.name,
+        startTime: formData.startTime,
+        endTime: formData.endTime,
+        isActive: formData.isActive,
+        staffIds: formData.staffIds,
+      };
+
+      if (formData.code) {
+        payload.code = formData.code;
+      }
+
+      console.log("[ShiftForm] Submitting payload:", payload);
+      await onSubmit(payload);
     } catch (e2) {
+      console.error("[ShiftForm] Submit error:", e2);
       setErr(e2?.response?.data?.message || e2.message || "Save failed");
     } finally {
       setSaving(false);
@@ -144,46 +204,45 @@ export default function ShiftForm({ initial = {}, onSubmit, submitText = "Save" 
   };
 
   return (
-    <form onSubmit={submit} className="grid gap-4">
+    <form onSubmit={handleSubmit} className="grid gap-4">
+      {/* Error Display */}
       {err && (
         <div className="rounded-xl border border-red-200 bg-red-50 p-3 text-sm text-red-700">
           {err}
         </div>
       )}
 
+      {/* Shift Name & Time Fields */}
       <div className="grid gap-4 md:grid-cols-2">
-        <Input
-          label="Code (optional)"
-          value={v.code}
-          onChange={(e) => setV({ ...v, code: e.target.value })}
-          placeholder="SH-0003"
-        />
-
         <div>
           <label className="mb-1 block text-sm font-medium text-slate-700">
             Shift Name
           </label>
           <select
             className="w-full rounded-xl border px-3 py-2"
-            value={v.name}
-            onChange={(e) => applyPresetIfEmpty(e.target.value)}
+            value={formData.name}
+            onChange={(e) => setFormData({ ...formData, name: e.target.value })}
           >
-            {SHIFT_NAME_OPTIONS.map((s) => (
-              <option key={s} value={s}>
-                {s}
+            {SHIFT_NAME_OPTIONS.map((opt) => (
+              <option key={opt} value={opt}>
+                {opt}
               </option>
             ))}
           </select>
 
           <div className="mt-2 flex flex-wrap gap-2">
-            {Object.keys(TIME_PRESETS).map((k) => (
+            {Object.keys(TIME_PRESETS).map((presetName) => (
               <button
-                key={k}
+                key={presetName}
                 type="button"
-                className="rounded-lg border px-3 py-1 text-xs hover:bg-slate-50"
-                onClick={() => setV((prev) => ({ ...prev, name: k, ...TIME_PRESETS[k] }))}
+                className={`rounded-lg border px-3 py-1 text-xs transition-colors ${
+                  formData.name === presetName
+                    ? "bg-blue-100 border-blue-300 text-blue-700"
+                    : "hover:bg-slate-50"
+                }`}
+                onClick={() => applyPreset(presetName)}
               >
-                {k} preset
+                {presetName}
               </button>
             ))}
           </div>
@@ -192,80 +251,146 @@ export default function ShiftForm({ initial = {}, onSubmit, submitText = "Save" 
         <Input
           type="time"
           label="Start Time"
-          value={v.startTime}
-          onChange={(e) => setV({ ...v, startTime: e.target.value })}
+          value={formData.startTime}
+          onChange={(e) => setFormData({ ...formData, startTime: e.target.value })}
         />
 
         <Input
           type="time"
           label="End Time"
-          value={v.endTime}
-          onChange={(e) => setV({ ...v, endTime: e.target.value })}
+          value={formData.endTime}
+          onChange={(e) => setFormData({ ...formData, endTime: e.target.value })}
         />
       </div>
 
-      {/* Nurses dropdown multi-select */}
-      <div ref={nWrap} className="relative">
+      {/* ✅ Staff Selection Dropdown */}
+      <div ref={dropdownRef} className="relative">
         <label className="mb-1 block text-sm font-medium text-slate-700">
-          Assign Nurses (search + multi select)
+          Assign Staff ({formData.staffIds.length} selected)
         </label>
 
         <input
-          className="w-full rounded-xl border px-3 py-2 text-sm outline-none"
-          value={nQuery}
+          type="text"
+          className="w-full rounded-xl border px-3 py-2 text-sm outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-200"
+          value={searchQuery}
           onChange={(e) => {
-            setNQuery(e.target.value);
-            setNOpen(true);
+            setSearchQuery(e.target.value);
+            setIsDropdownOpen(true);
           }}
-          onFocus={() => setNOpen(true)}
-          placeholder="Type nurse name or email..."
+          onFocus={() => setIsDropdownOpen(true)}
+          placeholder="Search staff by name or email..."
         />
 
-        {nOpen && (
-          <div className="absolute z-20 mt-2 w-full rounded-xl border bg-white shadow-lg max-h-64 overflow-auto">
-            {filteredNurses.length === 0 ? (
-              <div className="p-3 text-sm text-slate-500">No nurses found.</div>
+        {/* Dropdown List */}
+        {isDropdownOpen && (
+          <div className="absolute z-30 mt-1 w-full rounded-xl border bg-white shadow-xl max-h-72 overflow-auto">
+            {filteredStaff.length === 0 ? (
+              <div className="p-4 text-sm text-slate-500 text-center">
+                No staff found
+              </div>
             ) : (
-              filteredNurses.map((u) => {
-                const checked = v.nurseIds.includes(u._id);
-                return (
-                  <button
-                    type="button"
-                    key={u._id}
-                    onClick={() => toggleNurse(u._id)}
-                    className="w-full text-left p-3 hover:bg-slate-50 border-b last:border-b-0"
-                  >
-                    <div className="flex items-center justify-between">
-                      <div>
-                        <div className="text-sm font-medium">{u.name || "-"}</div>
-                        <div className="text-xs text-slate-600">{u.email || "-"}</div>
+              <>
+                {/* Header */}
+                <div className="sticky top-0 bg-slate-50 border-b p-2 flex justify-between items-center">
+                  <span className="text-xs text-slate-500">
+                    {filteredStaff.length} staff available
+                  </span>
+                  {formData.staffIds.length > 0 && (
+                    <button
+                      type="button"
+                      onClick={handleClearAll}
+                      className="text-xs text-red-500 hover:text-red-700"
+                    >
+                      Clear All
+                    </button>
+                  )}
+                </div>
+
+                {/* Staff Items */}
+                {filteredStaff.map((user) => {
+                  const isSelected = isStaffSelected(user.id);
+
+                  return (
+                    <div
+                      key={user.id}
+                      onClick={() => handleToggleStaff(user.id, user.name)}
+                      className={`flex items-center justify-between p-3 cursor-pointer border-b last:border-b-0 transition-colors ${
+                        isSelected ? "bg-blue-50 hover:bg-blue-100" : "hover:bg-slate-50"
+                      }`}
+                    >
+                      <div className="flex-1 min-w-0">
+                        <div className="text-sm font-medium truncate">
+                          {user.name || "No Name"}
+                        </div>
+                        <div className="text-xs text-slate-500 truncate">
+                          {user.email}
+                        </div>
+                        <div className="text-xs text-slate-400">
+                          {user.role}
+                        </div>
                       </div>
-                      <div className="text-xs">{checked ? "✅" : "⬜"}</div>
+
+                      {/* Checkbox */}
+                      <div
+                        className={`w-5 h-5 rounded border-2 flex items-center justify-center flex-shrink-0 ml-3 ${
+                          isSelected ? "bg-blue-500 border-blue-500" : "border-slate-300"
+                        }`}
+                      >
+                        {isSelected && (
+                          <svg
+                            className="w-3 h-3 text-white"
+                            fill="none"
+                            stroke="currentColor"
+                            viewBox="0 0 24 24"
+                          >
+                            <path
+                              strokeLinecap="round"
+                              strokeLinejoin="round"
+                              strokeWidth={3}
+                              d="M5 13l4 4L19 7"
+                            />
+                          </svg>
+                        )}
+                      </div>
                     </div>
-                  </button>
-                );
-              })
+                  );
+                })}
+              </>
             )}
           </div>
         )}
 
-        {/* ✅ NEW preview (count + up to 5 names) */}
-        <div className="mt-2 text-sm text-slate-600">
-          <div>Selected: {total}</div>
-
-          {total > 0 && (
-            <div className="mt-1 flex flex-wrap gap-2">
-              {shown.map((n) => (
-                <span key={n} className="rounded-full border px-2 py-1 text-xs">
-                  {n}
-                </span>
-              ))}
-              {more > 0 && <span className="text-xs text-slate-500">+{more} more</span>}
-            </div>
-          )}
-        </div>
+        {/* ✅ Selected Staff Chips */}
+        {selectedStaffObjects.length > 0 && (
+          <div className="mt-3 flex flex-wrap gap-2">
+            {selectedStaffObjects.slice(0, 5).map((user) => (
+              <span
+                key={user.id}
+                className="inline-flex items-center gap-1 rounded-full bg-blue-100 border border-blue-200 px-3 py-1 text-xs text-blue-800"
+              >
+                {user.name}
+                <button
+                  type="button"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    handleRemoveStaff(user.id);
+                  }}
+                  className="ml-1 text-blue-500 hover:text-red-500 font-bold"
+                >
+                  ×
+                </button>
+              </span>
+            ))}
+            {selectedStaffObjects.length > 5 && (
+              <span className="text-xs text-slate-500 py-1">
+                +{selectedStaffObjects.length - 5} more
+              </span>
+            )}
+          </div>
+        )}
       </div>
 
+      {/* Submit Button */}
       <div className="flex justify-end pt-2">
         <Button type="submit" disabled={saving}>
           {saving ? "Saving..." : submitText}

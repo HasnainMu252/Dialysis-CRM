@@ -144,14 +144,19 @@ export default function ScheduleForm({ initial, onSubmit, submitText = "Save" })
           .toLowerCase();
         const phone = String(p.phone || "").toLowerCase();
         const email = String(p.email || "").toLowerCase();
-        return mrn.includes(s) || name.includes(s) || phone.includes(s) || email.includes(s);
+        return (
+          mrn.includes(s) ||
+          name.includes(s) ||
+          phone.includes(s) ||
+          email.includes(s)
+        );
       })
       .slice(0, 10);
   }, [patients, pQuery]);
 
   const filteredBeds = useMemo(() => {
     const s = (bQuery || "").trim().toLowerCase();
-    const list = beds; // if you want only available: beds.filter(b => (b.status||"").toLowerCase()==="available")
+    const list = beds;
     if (!s) return list.slice(0, 10);
     return list
       .filter((b) => {
@@ -167,6 +172,8 @@ export default function ScheduleForm({ initial, onSubmit, submitText = "Save" })
     return shifts.map((s) => ({
       label: `${s.code} - ${s.name} (${s.startTime}-${s.endTime})`,
       value: s.code,
+      startTime: s.startTime,
+      endTime: s.endTime,
     }));
   }, [shifts]);
 
@@ -183,6 +190,22 @@ export default function ScheduleForm({ initial, onSubmit, submitText = "Save" })
     setBOpen(false);
   };
 
+  // ✅ When shift changes, auto-set start/end time from shift (only if empty or you want to always override)
+  const onShiftChange = (e) => {
+    const shiftCode = e.target.value;
+    update("shiftCode", shiftCode);
+
+    const found = shiftOptions.find((x) => x.value === shiftCode);
+    if (!found) return;
+
+    // ✅ Auto-fill times (recommended)
+    // If you want to NOT override manually set times, use:
+    // if (!form.startTime) update("startTime", found.startTime || "");
+    // if (!form.endTime) update("endTime", found.endTime || "");
+    update("startTime", found.startTime || "");
+    update("endTime", found.endTime || "");
+  };
+
   const validate = () => {
     if (!form.patientMrn) return "Patient MRN is required";
     if (!form.shiftCode) return "Shift is required";
@@ -190,6 +213,8 @@ export default function ScheduleForm({ initial, onSubmit, submitText = "Save" })
     if (!form.date) return "Date is required";
     if (!form.startTime) return "Start Time is required";
     if (!form.endTime) return "End Time is required";
+    if (String(form.endTime) <= String(form.startTime))
+      return "End Time must be greater than Start Time";
     return "";
   };
 
@@ -202,7 +227,6 @@ export default function ScheduleForm({ initial, onSubmit, submitText = "Save" })
 
     try {
       setSaving(true);
-      // ✅ payload exactly as backend wants
       await onSubmit({
         patientMrn: form.patientMrn,
         shiftCode: form.shiftCode,
@@ -276,7 +300,7 @@ export default function ScheduleForm({ initial, onSubmit, submitText = "Save" })
       <Select
         label="Shift"
         value={form.shiftCode}
-        onChange={(e) => update("shiftCode", e.target.value)}
+        onChange={onShiftChange} // ✅ changed
         options={["", ...shiftOptions.map((o) => o.value)]}
         disabled={sBusy}
         renderOption={(v) => {
@@ -338,23 +362,29 @@ export default function ScheduleForm({ initial, onSubmit, submitText = "Save" })
         onChange={(e) => update("date", e.target.value)}
       />
 
+      {/* ✅ TIME PICKER */}
       <div className="grid gap-4 md:grid-cols-2">
         <Input
+          type="time"               // ✅ changed
+          step="1800"               // ✅ 30 minutes (optional)
           label="Start Time"
           value={form.startTime}
           onChange={(e) => update("startTime", e.target.value)}
-          placeholder="08:00"
         />
         <Input
+          type="time"               // ✅ changed
+          step="1800"               // ✅ 30 minutes (optional)
           label="End Time"
           value={form.endTime}
           onChange={(e) => update("endTime", e.target.value)}
-          placeholder="12:00"
+          min={form.startTime || undefined} // ✅ prevents choosing before start in many browsers
         />
       </div>
 
       <div>
-        <label className="mb-1 block text-sm font-medium text-slate-700">Status</label>
+        <label className="mb-1 block text-sm font-medium text-slate-700">
+          Status
+        </label>
         <select
           className="w-full rounded-xl border px-3 py-2"
           value={form.status}

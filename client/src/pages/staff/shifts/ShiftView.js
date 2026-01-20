@@ -5,12 +5,38 @@ import Button from "../../../components/ui/Button";
 import Toast from "../../../components/ui/Toast";
 import { getShift, removeShiftStaff, updateShift } from "../../../api/shifts.api";
 
-// ✅ helper (top of file)
 const fmtDateTime = (d) => {
   if (!d) return "-";
   const dt = new Date(d);
   if (Number.isNaN(dt.getTime())) return "-";
-  return dt.toLocaleString(); // date + time
+  return dt.toLocaleString();
+};
+
+// ✅ Helper to extract user info from staff entry
+const getStaffInfo = (staffEntry) => {
+  if (!staffEntry) return { user: null, id: null };
+
+  // Handle: { userId: { id, name, email, role } }
+  if (staffEntry.userId && typeof staffEntry.userId === "object") {
+    return {
+      user: staffEntry.userId,
+      id: staffEntry.userId.id || staffEntry.userId._id,
+    };
+  }
+
+  // Handle: { userId: "string", name, email }
+  if (staffEntry.userId && typeof staffEntry.userId === "string") {
+    return {
+      user: staffEntry,
+      id: staffEntry.userId,
+    };
+  }
+
+  // Handle: { id, name, email }
+  return {
+    user: staffEntry,
+    id: staffEntry.id || staffEntry._id,
+  };
 };
 
 export default function ShiftView() {
@@ -18,16 +44,17 @@ export default function ShiftView() {
   const nav = useNavigate();
   const [row, setRow] = useState(null);
   const [err, setErr] = useState("");
-  const [busyId, setBusyId] = useState(""); // busy nurse id
+  const [busyId, setBusyId] = useState("");
   const [busyShift, setBusyShift] = useState(false);
 
   const load = async () => {
     setErr("");
     try {
       const res = await getShift(code);
-      // depending backend shape:
       const obj = res.data?.shift || res.data?.data || res.data;
       if (!obj) throw new Error("Shift not found");
+
+      console.log("[ShiftView] Loaded shift:", obj);
       setRow(obj);
     } catch (e) {
       setErr(e?.response?.data?.message || e.message || "Load failed");
@@ -38,17 +65,23 @@ export default function ShiftView() {
     load();
   }, [code]);
 
-  const onRemoveNurse = async (userId) => {
+  const onRemoveStaff = async (userId) => {
     if (!userId) return;
-    if (!window.confirm("Remove this nurse from shift?")) return;
+    if (!window.confirm("Remove this staff member from shift?")) return;
+
     setBusyId(userId);
     setErr("");
+
     try {
       await removeShiftStaff(code, userId);
-      // update UI locally
+
+      // Update UI locally
       setRow((prev) => ({
         ...prev,
-        staff: (prev?.staff || []).filter((s) => s?.userId?._id !== userId),
+        staff: (prev?.staff || []).filter((s) => {
+          const { id } = getStaffInfo(s);
+          return id !== userId;
+        }),
       }));
     } catch (e) {
       setErr(e?.response?.data?.message || e.message || "Remove failed");
@@ -96,58 +129,49 @@ export default function ShiftView() {
           <div className="text-sm text-slate-500">Loading...</div>
         ) : (
           <div className="grid gap-3 text-sm">
+            <div><b>Code:</b> {row.code || "-"}</div>
+            <div><b>Name:</b> {row.name || "-"}</div>
+            <div><b>Created:</b> {fmtDateTime(row.createdAt)}</div>
+            <div><b>Start:</b> {row.startTime || "-"}</div>
+            <div><b>End:</b> {row.endTime || "-"}</div>
             <div>
-              <b>Code:</b> {row.code || "-"}
-            </div>
-            <div>
-              <b>Name:</b> {row.name || "-"}
-            </div>
-
-            {/* ✅ NEW: created date/time */}
-            <div>
-              <b>Created:</b> {fmtDateTime(row.createdAt)}
-            </div>
-
-            <div>
-              <b>Start:</b> {row.startTime || "-"}
-            </div>
-            <div>
-              <b>End:</b> {row.endTime || "-"}
-            </div>
-            <div>
-              <b>Active:</b> {row.isActive ? "Yes" : "No"}
+              <b>Active:</b>{" "}
+              <span className={row.isActive ? "text-green-600" : "text-red-600"}>
+                {row.isActive ? "Yes" : "No"}
+              </span>
             </div>
 
+            {/* ✅ Assigned Staff */}
             <div className="pt-2">
-              <b>Assigned Nurses:</b>
+              <b>Assigned Staff ({(row.staff || []).length}):</b>
               <div className="mt-2 grid gap-2">
                 {(row.staff || []).length === 0 ? (
-                  <div className="text-slate-500">No staff assigned</div>
+                  <div className="text-slate-500 italic">No staff assigned</div>
                 ) : (
-                  row.staff.map((s) => {
-                    const user = s.userId || {};
-                    const uid = user._id;
+                  row.staff.map((staffEntry, index) => {
+                    const { user, id } = getStaffInfo(staffEntry);
+
                     return (
                       <div
-                        key={s._id}
-                        className="rounded-xl border p-3 flex items-center justify-between"
+                        key={id || `staff-${index}`}
+                        className="rounded-xl border p-3 flex items-center justify-between bg-slate-50"
                       >
                         <div>
-                          <div className="font-medium">{user.name || "-"}</div>
+                          <div className="font-medium">{user?.name || "-"}</div>
                           <div className="text-xs text-slate-600">
-                            {user.email || "-"}
+                            {user?.email || "-"}
                           </div>
-                          <div className="text-xs text-slate-600">
-                            {user.role || s.role || "-"}
+                          <div className="text-xs text-slate-500">
+                            {user?.role || staffEntry?.role || "-"}
                           </div>
                         </div>
                         <Button
                           size="sm"
                           variant="danger"
-                          disabled={!uid || busyId === uid}
-                          onClick={() => onRemoveNurse(uid)}
+                          disabled={!id || busyId === id}
+                          onClick={() => onRemoveStaff(id)}
                         >
-                          {busyId === uid ? "Removing..." : "Remove"}
+                          {busyId === id ? "Removing..." : "Remove"}
                         </Button>
                       </div>
                     );
@@ -160,9 +184,11 @@ export default function ShiftView() {
               <Button variant="outline" onClick={load}>
                 Reload
               </Button>
-              <Button variant="danger" disabled={busyShift} onClick={onDeactivate}>
-                {busyShift ? "Deactivating..." : "Deactivate Shift"}
-              </Button>
+              {row.isActive && (
+                <Button variant="danger" disabled={busyShift} onClick={onDeactivate}>
+                  {busyShift ? "Deactivating..." : "Deactivate Shift"}
+                </Button>
+              )}
             </div>
           </div>
         )}

@@ -21,7 +21,7 @@ export default function PatientLayout() {
     <div className="min-h-screen md:flex">
       <Sidebar items={items} title="Patient Portal" />
       <main className="flex-1">
-        <Topbar
+        {/* <Topbar
           title="Patient"
           right={
             <Button
@@ -34,7 +34,7 @@ export default function PatientLayout() {
               Logout
             </Button>
           }
-        />
+        /> */}
         <Outlet />
       </main>
     </div>

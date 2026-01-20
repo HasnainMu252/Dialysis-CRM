@@ -15,7 +15,7 @@ export default function Sidebar({ items = [], title = "Dialysis CRM" }) {
           </NavLink>
         ))}
       </nav>
-      <div className="mt-auto pt-4 text-xs text-slate-400">Craft4Dev</div>
+      {/* <div className="mt-auto pt-4 text-xs text-slate-400">Craft4Dev</div> */}
     </aside>
   );
 }

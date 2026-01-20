@@ -10,6 +10,7 @@ import PatientLogin from "./pages/auth/PatientLogin";
 import NotFound from "./pages/common/NotFound";
 
 import StaffDashboard from "./pages/staff/Dashboard";
+
 import PatientsList from "./pages/staff/patients/PatientsList";
 import PatientCreate from "./pages/staff/patients/PatientCreate";
 import PatientEdit from "./pages/staff/patients/PatientEdit";
@@ -48,6 +49,12 @@ import ReferralView from "./pages/staff/referrals/ReferralView";
 
 import SettingsView from "./pages/staff/settings/SettingsView";
 
+// ✅ User Management Pages
+import UsersList from "./pages/staff/users/UserList";
+import UserNew from "./pages/staff/users/UserNew";
+import UserEdit from "./pages/staff/users/UserEdit";
+import UserView from "./pages/staff/users/UserView";
+
 import PatientDashboard from "./pages/patient/Dashboard";
 import PatientProfile from "./pages/patient/Profile";
 import MySchedule from "./pages/patient/MySchedule";
@@ -59,7 +66,7 @@ export default function App() {
     <Routes>
       <Route path="/" element={<Navigate to="/staff/login" replace />} />
 
-      {/* Public auth pages (NOT nested under /staff) */}
+      {/* Public auth pages */}
       <Route path="/staff/login" element={<StaffLogin />} />
       <Route path="/patient/login" element={<PatientLogin />} />
       <Route path="/patient/register" element={<PatientRegister />} />
@@ -76,39 +83,53 @@ export default function App() {
       >
         <Route index element={<StaffDashboard />} />
 
+        {/* Patients */}
         <Route path="patients" element={<PatientsList />} />
         <Route path="patients/new" element={<PatientCreate />} />
         <Route path="patients/:mrn" element={<PatientView />} />
         <Route path="patients/:mrn/edit" element={<PatientEdit />} />
 
+        {/* Beds */}
         <Route path="beds" element={<BedsList />} />
         <Route path="beds/new" element={<BedCreate />} />
         <Route path="beds/:code" element={<BedView />} />
         <Route path="beds/:code/edit" element={<BedEdit />} />
 
+        {/* Shifts */}
         <Route path="shifts" element={<ShiftsList />} />
         <Route path="shifts/new" element={<ShiftCreate />} />
         <Route path="shifts/:code" element={<ShiftView />} />
         <Route path="shifts/:code/edit" element={<ShiftEdit />} />
 
+        {/* Schedules */}
         <Route path="schedules" element={<SchedulesList />} />
         <Route path="schedules/new" element={<ScheduleCreate />} />
         <Route path="schedules/:code" element={<ScheduleView />} />
         <Route path="schedules/:code/edit" element={<ScheduleEdit />} />
 
+        {/* Sessions & Maintenance */}
         <Route path="sessions" element={<SessionLifecycle />} />
         <Route path="maintenance" element={<MaintenanceRelease />} />
 
+        {/* Billing */}
         <Route path="billing" element={<BillingList />} />
         <Route path="billing/new" element={<BillingNew />} />
         <Route path="billing/:code" element={<BillingView />} />
         <Route path="billing/:code/edit" element={<BillingEdit />} />
 
+        {/* Referrals */}
         <Route path="referrals" element={<ReferralsList />} />
         <Route path="referrals/new" element={<ReferralCreate />} />
         <Route path="referrals/:id" element={<ReferralView />} />
         <Route path="referrals/:id/edit" element={<ReferralEdit />} />
 
+        {/* ✅ Users Management */}
+        <Route path="users" element={<UsersList />} />
+        <Route path="users/new" element={<UserNew />} />
+        <Route path="users/:id" element={<UserView />} />
+        <Route path="users/:id/edit" element={<UserEdit />} />
+
+        {/* Settings */}
         <Route path="settings" element={<SettingsView />} />
       </Route>
 

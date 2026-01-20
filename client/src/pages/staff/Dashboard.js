@@ -1,34 +1,26 @@
 import React, { useEffect, useMemo, useState } from "react";
+import { Link } from "react-router-dom";
 import PageShell from "../../layouts/PageShell";
 import Toast from "../../components/ui/Toast";
-import { todayWorkload } from "../../api/shifts.api";
-import { todaySchedules } from "../../api/schedules.api";
+import Button from "../../components/ui/Button";
+import { todaySchedules, upcomingSchedules } from "../../api/schedules.api";
+import { listPatients } from "../../api/patients.api";
 
-// small helpers (safe + generic)
-const isNum = (v) => typeof v === "number" && Number.isFinite(v);
-const pickNumber = (obj, keys) => {
-  if (!obj) return null;
-  for (const k of keys) {
-    const v = obj?.[k];
-    if (isNum(v)) return v;
-  }
-  return null;
+const fmtDate = (d) => {
+  if (!d) return "-";
+  const dt = new Date(d);
+  if (Number.isNaN(dt.getTime())) return "-";
+  return dt.toLocaleDateString();
 };
-const pickText = (obj, keys) => {
-  if (!obj) return "";
-  for (const k of keys) {
-    const v = obj?.[k];
-    if (typeof v === "string" && v.trim()) return v.trim();
-  }
-  return "";
-};
-const formatTime = (s) => (s ? String(s).slice(0, 5) : "");
-const badgeClass = (tone) => {
+
+const fmtTime = (t) => (t ? String(t).slice(0, 5) : "-");
+
+const pill = (tone) => {
   switch (tone) {
     case "success":
       return "bg-emerald-50 text-emerald-700 ring-emerald-200";
     case "warning":
-      return "bg-amber-50 text-amber-700 ring-amber-200";
+      return "bg-amber-50 text-amber-800 ring-amber-200";
     case "danger":
       return "bg-rose-50 text-rose-700 ring-rose-200";
     default:
@@ -36,40 +28,60 @@ const badgeClass = (tone) => {
   }
 };
 
-function StatCard({ label, value, hint }) {
+const toneByStatus = (status) => {
+  const s = String(status || "").toLowerCase();
+  if (s.includes("complete")) return "success";
+  if (s.includes("cancel")) return "danger";
+  if (s.includes("pending")) return "warning";
+  return "neutral";
+};
+
+function StatCard({ title, value, sub, tone = "neutral" }) {
   return (
     <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
       <div className="flex items-start justify-between gap-3">
         <div>
-          <div className="text-sm text-slate-500">{label}</div>
-          <div className="mt-2 text-2xl font-semibold tracking-tight text-slate-900">
-            {value ?? <span className="text-slate-300">—</span>}
+          <div className="text-sm text-slate-500">{title}</div>
+          <div className="mt-2 text-3xl font-semibold tracking-tight text-slate-900">
+            {value}
           </div>
-          {hint ? <div className="mt-1 text-xs text-slate-500">{hint}</div> : null}
+          {sub ? <div className="mt-1 text-xs text-slate-500">{sub}</div> : null}
         </div>
-        <div className="h-10 w-10 rounded-2xl bg-slate-100" />
+
+        <div
+          className={[
+            "inline-flex h-10 w-10 items-center justify-center rounded-2xl ring-1 ring-inset",
+            pill(tone),
+          ].join(" ")}
+        >
+          <span className="text-xs font-bold">●</span>
+        </div>
       </div>
     </div>
   );
 }
 
-function SkeletonRow() {
+function TableShell({ title, right, children }) {
   return (
-    <div className="grid grid-cols-12 gap-3 rounded-xl border border-slate-200 bg-white p-4">
-      <div className="col-span-4 h-4 rounded bg-slate-100" />
-      <div className="col-span-2 h-4 rounded bg-slate-100" />
-      <div className="col-span-2 h-4 rounded bg-slate-100" />
-      <div className="col-span-2 h-4 rounded bg-slate-100" />
-      <div className="col-span-2 h-4 rounded bg-slate-100" />
+    <div className="rounded-2xl border border-slate-200 bg-white shadow-sm">
+      <div className="flex items-center justify-between gap-3 border-b border-slate-200 px-5 py-4">
+        <div>
+          <div className="text-sm font-semibold text-slate-900">{title}</div>
+        </div>
+        {right}
+      </div>
+      <div className="p-4">{children}</div>
     </div>
   );
 }
 
 export default function StaffDashboard() {
   const [loading, setLoading] = useState(true);
-  const [workload, setWorkload] = useState(null);
-  const [today, setToday] = useState([]);
   const [err, setErr] = useState("");
+
+  const [patients, setPatients] = useState([]);
+  const [today, setToday] = useState([]);
+  const [upcoming, setUpcoming] = useState([]);
 
   useEffect(() => {
     let mounted = true;
@@ -77,121 +89,86 @@ export default function StaffDashboard() {
       setErr("");
       setLoading(true);
       try {
-        const [w, t] = await Promise.allSettled([todayWorkload(), todaySchedules()]);
+        const [pRes, tRes, uRes] = await Promise.allSettled([
+          listPatients(),
+          todaySchedules(),
+          upcomingSchedules(),
+        ]);
+
         if (!mounted) return;
 
-        if (w.status === "fulfilled") setWorkload(w.value?.data ?? null);
-        if (t.status === "fulfilled") {
-          const data = t.value?.data;
-          const items = Array.isArray(data) ? data : data?.items || data?.rows || [];
-          setToday(Array.isArray(items) ? items : []);
+        if (pRes.status === "fulfilled") {
+          const list = Array.isArray(pRes.value?.data?.patients) ? pRes.value.data.patients : [];
+          setPatients(list);
+        }
+
+        if (tRes.status === "fulfilled") {
+          const list = Array.isArray(tRes.value?.data?.schedules) ? tRes.value.data.schedules : [];
+          setToday(list);
+        }
+
+        if (uRes.status === "fulfilled") {
+          const list = Array.isArray(uRes.value?.data?.schedules) ? uRes.value.data.schedules : [];
+          setUpcoming(list);
         }
       } catch (e) {
-        if (mounted) setErr("Failed to load dashboard");
+        setErr("Failed to load dashboard");
       } finally {
         if (mounted) setLoading(false);
       }
     })();
+
     return () => {
       mounted = false;
     };
   }, []);
 
-  // Try to read common workload keys (works even if your backend uses different names)
   const stats = useMemo(() => {
-    const w = workload || {};
+    const totalPatients = patients.length;
+
+    const pendingPatients = patients.filter(
+      (p) => String(p.status || "").toLowerCase() === "pending"
+    ).length;
+
+    const activePatients = patients.filter(
+      (p) => String(p.status || "").toLowerCase() === "active"
+    ).length;
+
     return {
-      totalPatients:
-        pickNumber(w, ["totalPatients", "patients", "patientCount", "total"]) ??
-        pickNumber(w?.summary, ["patients", "totalPatients"]) ??
-        null,
-      totalSessions:
-        pickNumber(w, ["totalSessions", "sessions", "sessionCount", "appointments"]) ??
-        pickNumber(w?.summary, ["sessions", "totalSessions"]) ??
-        null,
-      occupiedBeds:
-        pickNumber(w, ["occupiedBeds", "busyBeds", "bedsOccupied"]) ??
-        pickNumber(w?.beds, ["occupied", "busy"]) ??
-        null,
-      availableBeds:
-        pickNumber(w, ["availableBeds", "freeBeds", "bedsAvailable"]) ??
-        pickNumber(w?.beds, ["available", "free"]) ??
-        null,
+      totalPatients,
+      pendingPatients,
+      activePatients,
+      todaySchedules: today.length,
+      upcomingSchedules: upcoming.length,
     };
-  }, [workload]);
+  }, [patients, today, upcoming]);
 
-  const rows = useMemo(() => {
-    return (today || []).map((r, idx) => {
-      // Make it resilient to different shapes
-      const patientName =
-        pickText(r, ["patientName", "name", "fullName"]) ||
-        [pickText(r, ["firstName"]), pickText(r, ["lastName"])].filter(Boolean).join(" ") ||
-        pickText(r?.patient, ["fullName", "name"]) ||
-        [pickText(r?.patient, ["firstName"]), pickText(r?.patient, ["lastName"])].filter(Boolean).join(" ") ||
-        `Patient #${idx + 1}`;
-
-      const shift =
-        pickText(r, ["shift", "shiftName"]) ||
-        pickText(r?.shift, ["name", "title"]) ||
-        "—";
-
-      const bed =
-        pickText(r, ["bed", "bedCode", "bedNo"]) ||
-        pickText(r?.bed, ["code", "bedCode", "name"]) ||
-        "—";
-
-      const start =
-        formatTime(pickText(r, ["startTime", "from", "start"])) ||
-        formatTime(pickText(r?.slot, ["start", "from"])) ||
-        "";
-
-      const end =
-        formatTime(pickText(r, ["endTime", "to", "end"])) ||
-        formatTime(pickText(r?.slot, ["end", "to"])) ||
-        "";
-
-      const status =
-        pickText(r, ["status", "state"]) ||
-        pickText(r?.schedule, ["status"]) ||
-        "Scheduled";
-
-      const tone =
-        status.toLowerCase().includes("done") || status.toLowerCase().includes("completed")
-          ? "success"
-          : status.toLowerCase().includes("cancel")
-          ? "danger"
-          : status.toLowerCase().includes("late") || status.toLowerCase().includes("pending")
-          ? "warning"
-          : "neutral";
-
-      return {
-        key: r?._id || r?.id || `${idx}`,
-        patientName,
-        shift,
-        bed,
-        time: start || end ? `${start || "—"} - ${end || "—"}` : "—",
-        status,
-        tone,
-        raw: r,
-      };
-    });
-  }, [today]);
+  const topUpcoming = useMemo(() => upcoming.slice(0, 6), [upcoming]);
 
   return (
     <PageShell>
-      {/* Header */}
-      <div className="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
+      {/* HEADER */}
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
         <div>
-          <h2 className="text-xl font-semibold tracking-tight text-slate-900">Dashboard</h2>
+          <h2 className="text-xl font-semibold tracking-tight text-slate-900">
+            Admin Dashboard
+          </h2>
           <p className="mt-1 text-sm text-slate-500">
-            Today overview — workload + schedules
+            Patients, schedules & approvals overview
           </p>
         </div>
 
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2">
           <div className="rounded-full border border-slate-200 bg-white px-3 py-1 text-xs text-slate-600">
             {new Date().toLocaleDateString()}
           </div>
+
+          <Link to="/staff/patients/new">
+            <Button>Add Patient</Button>
+          </Link>
+          <Link to="/staff/schedules/new">
+            <Button variant="outline">Add Schedule</Button>
+          </Link>
         </div>
       </div>
 
@@ -201,145 +178,191 @@ export default function StaffDashboard() {
         </div>
       ) : null}
 
-      {/* Stats */}
-      <div className="mt-5 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+      {/* STATS */}
+      <div className="mt-5 grid gap-4 sm:grid-cols-2 lg:grid-cols-5">
         <StatCard
-          label="Patients (today)"
+          title="Total Patients"
           value={loading ? "…" : stats.totalPatients}
-          hint="Total patients scheduled for today"
+          sub={loading ? "" : `${stats.activePatients} Active`}
+          tone="neutral"
         />
         <StatCard
-          label="Sessions (today)"
-          value={loading ? "…" : stats.totalSessions}
-          hint="Total dialysis sessions planned"
+          title="Pending Patients"
+          value={loading ? "…" : stats.pendingPatients}
+          sub="Needs admin approval"
+          tone={stats.pendingPatients ? "warning" : "success"}
         />
         <StatCard
-          label="Beds occupied"
-          value={loading ? "…" : stats.occupiedBeds}
-          hint="Currently assigned / busy beds"
+          title="Today Schedules"
+          value={loading ? "…" : stats.todaySchedules}
+          sub="Scheduled today"
+          tone="neutral"
         />
         <StatCard
-          label="Beds available"
-          value={loading ? "…" : stats.availableBeds}
-          hint="Free capacity for today"
+          title="Upcoming Schedules"
+          value={loading ? "…" : stats.upcomingSchedules}
+          sub="Next few days"
+          tone="neutral"
+        />
+        <StatCard
+          title="System Health"
+          value={loading ? "…" : "OK"}
+          sub="APIs responding"
+          tone="success"
         />
       </div>
 
-      {/* Main */}
-      <div className="mt-5 grid gap-4 lg:grid-cols-3">
-        {/* Table */}
-        <div className="lg:col-span-2 rounded-2xl border border-slate-200 bg-white shadow-sm">
-          <div className="flex items-center justify-between gap-3 border-b border-slate-200 px-5 py-4">
-            <div>
-              <div className="text-sm font-semibold text-slate-900">Today Schedules</div>
-              <div className="mt-0.5 text-xs text-slate-500">
-                {loading ? "Loading…" : `${rows.length} items`}
-              </div>
+      {/* QUICK ACTIONS */}
+      <div className="mt-5 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+          <div>
+            <div className="text-sm font-semibold text-slate-900">Quick Actions</div>
+            <div className="mt-1 text-xs text-slate-500">
+              Manage patients & schedules faster
             </div>
           </div>
+          <div className="flex flex-wrap gap-2">
+            <Link to="/staff/patients">
+              <Button variant="outline">View Patients</Button>
+            </Link>
+            <Link to="/staff/schedules">
+              <Button variant="outline">View Schedules</Button>
+            </Link>
+            <Link to="/staff/beds">
+              <Button variant="outline">Beds</Button>
+            </Link>
+            <Link to="/staff/shifts">
+              <Button variant="outline">Shifts</Button>
+            </Link>
+          </div>
+        </div>
+      </div>
 
-          <div className="p-4">
-            {loading ? (
-              <div className="space-y-3">
-                <SkeletonRow />
-                <SkeletonRow />
-                <SkeletonRow />
+      {/* TABLES */}
+      <div className="mt-5 grid gap-4 lg:grid-cols-2">
+        {/* TODAY TABLE */}
+        <TableShell
+          title="Today Schedules"
+          right={
+            <Link to="/staff/schedules">
+              <Button variant="outline" size="sm">Open</Button>
+            </Link>
+          }
+        >
+          {loading ? (
+            <div className="text-sm text-slate-500">Loading…</div>
+          ) : today.length === 0 ? (
+            <div className="rounded-2xl border border-dashed border-slate-200 bg-slate-50 p-6 text-center text-sm text-slate-600">
+              No schedules found for today.
+            </div>
+          ) : (
+            <div className="overflow-hidden rounded-2xl border border-slate-200">
+              <div className="grid grid-cols-12 gap-3 bg-slate-50 px-4 py-3 text-xs font-medium text-slate-600">
+                <div className="col-span-4">Patient</div>
+                <div className="col-span-2">MRN</div>
+                <div className="col-span-2">Bed</div>
+                <div className="col-span-2">Time</div>
+                <div className="col-span-2 text-right">Status</div>
               </div>
-            ) : rows.length === 0 ? (
-              <div className="rounded-2xl border border-dashed border-slate-200 bg-slate-50 p-8 text-center">
-                <div className="text-sm font-medium text-slate-900">No schedules found</div>
-                <div className="mt-1 text-sm text-slate-500">
-                  There are no sessions scheduled for today (or API returned empty).
-                </div>
-              </div>
-            ) : (
-              <div className="overflow-hidden rounded-2xl border border-slate-200">
-                <div className="grid grid-cols-12 gap-3 bg-slate-50 px-4 py-3 text-xs font-medium text-slate-600">
-                  <div className="col-span-4">Patient</div>
-                  <div className="col-span-2">Shift</div>
-                  <div className="col-span-2">Bed</div>
-                  <div className="col-span-2">Time</div>
-                  <div className="col-span-2">Status</div>
-                </div>
 
-                <div className="divide-y divide-slate-200">
-                  {rows.map((r) => (
+              <div className="divide-y divide-slate-200">
+                {today.map((r) => {
+                  const code = r.scheduleCode || r.scheduleId || r.id;
+                  const tone = toneByStatus(r.status);
+                  return (
                     <div
-                      key={r.key}
+                      key={code}
                       className="grid grid-cols-12 gap-3 px-4 py-3 text-sm hover:bg-slate-50"
                     >
                       <div className="col-span-4">
-                        <div className="font-medium text-slate-900">{r.patientName}</div>
-                        <div className="mt-0.5 text-xs text-slate-500">Today</div>
+                        <div className="font-medium text-slate-900">{r.patientName || "-"}</div>
+                        <div className="text-xs text-slate-500">{fmtDate(r.date)}</div>
                       </div>
-                      <div className="col-span-2 text-slate-700">{r.shift}</div>
-                      <div className="col-span-2 text-slate-700">{r.bed}</div>
-                      <div className="col-span-2 text-slate-700">{r.time}</div>
-                      <div className="col-span-2">
+                      <div className="col-span-2 text-slate-700">{r.patientMrn || "-"}</div>
+                      <div className="col-span-2 text-slate-700">{r.bedCode || "-"}</div>
+                      <div className="col-span-2 text-slate-700">
+                        {fmtTime(r.startTime)} - {fmtTime(r.endTime)}
+                      </div>
+                      <div className="col-span-2 flex justify-end">
                         <span
                           className={[
                             "inline-flex items-center rounded-full px-2.5 py-1 text-xs font-medium ring-1 ring-inset",
-                            badgeClass(r.tone),
+                            pill(tone),
                           ].join(" ")}
                         >
-                          {r.status}
+                          {r.status || "—"}
                         </span>
                       </div>
                     </div>
-                  ))}
-                </div>
-              </div>
-            )}
-          </div>
-        </div>
-
-        {/* Side card */}
-        <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
-          <div className="text-sm font-semibold text-slate-900">Quick Insights</div>
-          <div className="mt-1 text-sm text-slate-500">
-            Helpful snapshot for staff on duty.
-          </div>
-
-          <div className="mt-4 space-y-3">
-            <div className="rounded-2xl bg-slate-50 p-4">
-              <div className="text-xs text-slate-500">High-level</div>
-              <div className="mt-1 text-sm text-slate-800">
-                {rows.length
-                  ? `You have ${rows.length} schedules listed for today.`
-                  : "No schedules to show today."}
+                  );
+                })}
               </div>
             </div>
+          )}
+        </TableShell>
 
-            <div className="rounded-2xl bg-slate-50 p-4">
-              <div className="text-xs text-slate-500">Tip</div>
-              <div className="mt-1 text-sm text-slate-800">
-                If any fields look “—”, send me one sample schedule JSON shape and I’ll map exact
-                columns (patient, nurse, modality, chair/bed, times, status).
-              </div>
+        {/* UPCOMING TABLE */}
+        <TableShell
+          title="Upcoming (next)"
+          right={
+            <Link to="/staff/schedules">
+              <Button variant="outline" size="sm">Open</Button>
+            </Link>
+          }
+        >
+          {loading ? (
+            <div className="text-sm text-slate-500">Loading…</div>
+          ) : upcoming.length === 0 ? (
+            <div className="rounded-2xl border border-dashed border-slate-200 bg-slate-50 p-6 text-center text-sm text-slate-600">
+              No upcoming schedules found.
             </div>
+          ) : (
+            <div className="space-y-3">
+              {topUpcoming.map((r) => {
+                const code = r.scheduleCode || r.scheduleId || r.id;
+                const tone = toneByStatus(r.status);
+                return (
+                  <div
+                    key={code}
+                    className="rounded-2xl border border-slate-200 p-4 hover:bg-slate-50"
+                  >
+                    <div className="flex items-start justify-between gap-3">
+                      <div>
+                        <div className="text-sm font-semibold text-slate-900">
+                          {r.patientName || "-"}
+                        </div>
+                        <div className="mt-1 text-xs text-slate-500">
+                          {r.patientMrn || "-"} • {fmtDate(r.date)} •{" "}
+                          {fmtTime(r.startTime)}-{fmtTime(r.endTime)}
+                        </div>
+                        <div className="mt-1 text-xs text-slate-500">
+                          Bed: {r.bedCode || "—"} {r.bedName ? `(${r.bedName})` : ""}
+                        </div>
+                      </div>
 
-            {/* Debug (collapsible) */}
-            <details className="rounded-2xl border border-slate-200 p-4">
-              <summary className="cursor-pointer text-sm font-medium text-slate-800">
-                Raw API data (debug)
-              </summary>
-              <div className="mt-3 space-y-3">
-                <div>
-                  <div className="text-xs font-medium text-slate-600">workload</div>
-                  <pre className="mt-1 max-h-48 overflow-auto rounded-xl bg-slate-950 p-3 text-xs text-slate-100">
-                    {JSON.stringify(workload, null, 2)}
-                  </pre>
+                      <span
+                        className={[
+                          "inline-flex items-center rounded-full px-2.5 py-1 text-xs font-medium ring-1 ring-inset",
+                          pill(tone),
+                        ].join(" ")}
+                      >
+                        {r.status || "—"}
+                      </span>
+                    </div>
+                  </div>
+                );
+              })}
+
+              {upcoming.length > topUpcoming.length ? (
+                <div className="text-center">
+                  <Link to="/staff/schedules">
+                    <Button variant="outline">View all upcoming</Button>
+                  </Link>
                 </div>
-                <div>
-                  <div className="text-xs font-medium text-slate-600">todaySchedules</div>
-                  <pre className="mt-1 max-h-48 overflow-auto rounded-xl bg-slate-950 p-3 text-xs text-slate-100">
-                    {JSON.stringify(today, null, 2)}
-                  </pre>
-                </div>
-              </div>
-            </details>
-          </div>
-        </div>
+              ) : null}
+            </div>
+          )}
+        </TableShell>
       </div>
     </PageShell>
   );
