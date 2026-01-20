@@ -17,7 +17,7 @@ import billingRoutes from "./routes/billing.routes.js";
 import referrals from "./routes/referral.routes.js";
 import patientsRoutes from "./routes/patient.routes.js";
 
-
+import userRoutes from "./routes/user.routes.js"
 
 import swaggerUi from "swagger-ui-express"; // ✅ you need this
 import authRoutes from "./routes/auth.routes.js"; // Import the new auth routes
@@ -58,6 +58,7 @@ app.use("/api/maintenance", maintenanceRoutes);
 app.use("/api/billing", billingRoutes);
 app.use("/api/referrals", referrals);
 
+app.use("/api/users", userRoutes);
 
 
 app.use("/api/patients", patientsRoutes);

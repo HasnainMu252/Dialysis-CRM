@@ -1,6 +1,7 @@
 // server/controllers/auth.controller.js
 import jwt from "jsonwebtoken";
-import User from "../models/user.model.js";
+import User ,  {RoleEnum} from "../models/user.model.js";
+
 import Patient from "../models/patient.model.js";
 
 // helper: sign token for staff/admin users
@@ -18,40 +19,49 @@ const signUserToken = (id) =>
 // POST /api/auth/register
 export const register = async (req, res) => {
   try {
-    const { name, email, password, role = "Staff" } = req.body;
+    const { name, email, password, role } = req.body;
 
     if (!name || !email || !password) {
-      return res.status(400).json({ message: "name, email, password are required" });
+      return res.status(400).json({ success: false, message: "Missing required fields" });
     }
 
-    const cleanEmail = String(email).toLowerCase().trim();
+    // role validate (only if role provided)
+    if (role && !RoleEnum.includes(role)) {
+      return res.status(400).json({ success: false, message: "Invalid role" });
+    }
 
-    const exists = await User.findOne({ email: cleanEmail });
-    if (exists) return res.status(400).json({ message: "Email already in use" });
+    const exists = await User.findOne({ email: email.toLowerCase() });
+    if (exists) {
+      return res.status(409).json({ success: false, message: "Email already registered" });
+    }
 
     const user = await User.create({
-      name: String(name).trim(),
-      email: cleanEmail,
+      name,
+      email,
       password,
-      role,
+      role: role || undefined, // default Nurse schema me set ho jayega
     });
 
-    const token = signUserToken(user._id);
+    // Ensure that the userId is included in the response
+    const formattedUser = {
+      userId: user.userId, // This is the unique userId created
+      id: user._id,
+      name: user.name,
+      email: user.email,
+      role: user.role,
+      active: user.active,
+    };
 
     return res.status(201).json({
-      user: {
-        id: user._id,
-        name: user.name,
-        email: user.email,
-        role: user.role,
-      },
-      token,
+      success: true,
+      message: "Registered",
+      user: formattedUser,
     });
-  } catch (err) {
-    console.error("❌ Register error:", err);
-    return res.status(500).json({ message: "Server error", error: err.message });
+  } catch (e) {
+    return res.status(500).json({ success: false, message: "Server error", error: e.message });
   }
 };
+
 
 // POST /api/auth/login
 export const login = async (req, res) => {

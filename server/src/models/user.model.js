@@ -16,11 +16,19 @@ const userSchema = new mongoose.Schema(
     password: { type: String, required: true, minlength: 6 },
     role: { type: String, enum: RoleEnum, default: "Nurse" },
     active: { type: Boolean, default: true },
+    userId: { type: String, unique: true }, // Add this line
   },
   { timestamps: true }
 );
 
+// Pre-save hook to generate the userId
 userSchema.pre("save", async function (next) {
+  if (this.isNew) {
+    const count = await mongoose.model("User").countDocuments();
+    this.userId = `usr-${String(count + 1).padStart(2, "0")}`;
+  }
+
+  // Hash password if it's modified
   if (!this.isModified("password")) return next();
   this.password = await bcrypt.hash(this.password, 10);
   next();
