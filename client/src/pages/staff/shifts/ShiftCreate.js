@@ -4,7 +4,7 @@ import PageShell from "../../../layouts/PageShell";
 import Button from "../../../components/ui/Button";
 import Toast from "../../../components/ui/Toast";
 import ShiftForm from "../../../components/forms/ShiftForm";
-import { addShiftStaff, createShift } from "../../../api/shifts.api";
+import { assignStaff, createShift } from "../../../api/shifts.api";
 
 export default function ShiftCreate() {
   const nav = useNavigate();
@@ -28,7 +28,7 @@ export default function ShiftCreate() {
     // assign nurses
     if (code && Array.isArray(payload.nurseIds) && payload.nurseIds.length) {
       for (const userId of payload.nurseIds) {
-        await addShiftStaff(code, { userId });
+        await assignStaff(code, { userId });
       }
     }
 

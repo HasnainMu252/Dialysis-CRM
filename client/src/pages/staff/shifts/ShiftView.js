@@ -3,7 +3,7 @@ import { Link, useNavigate, useParams } from "react-router-dom";
 import PageShell from "../../../layouts/PageShell";
 import Button from "../../../components/ui/Button";
 import Toast from "../../../components/ui/Toast";
-import { getShift, removeShiftStaff, updateShift } from "../../../api/shifts.api";
+import { getShift, removeStaff, updateShift } from "../../../api/shifts.api";
 
 const fmtDateTime = (d) => {
   if (!d) return "-";
@@ -73,7 +73,7 @@ export default function ShiftView() {
     setErr("");
 
     try {
-      await removeShiftStaff(code, userId);
+      await removeStaff(code, userId);
 
       // Update UI locally
       setRow((prev) => ({
