@@ -9,7 +9,7 @@ const shiftSchema = new mongoose.Schema(
   {
     code: { type: String, unique: true, index: true },
 
-    name: { type: String, required: true, trim: true }, // Morning / Evening / Night
+    name: { type: String, trim: true }, // Morning / Evening / Night
     startTime: { type: String, required: true }, // "08:00"
     endTime: { type: String, required: true },   // "16:00"
     isActive: { type: Boolean, default: true },
